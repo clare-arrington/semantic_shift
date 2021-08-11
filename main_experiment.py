@@ -1,3 +1,4 @@
+#%%
 """
 Runs semantic change experiment on arxiv data.
 Saves a file un results/arxiv/ containing the semantic shift scores for
@@ -99,38 +100,18 @@ def print_table(d, words, n=20, f=None, include_stable=False):
 
     return stable_results, unstable_results
 
-"""
-The following experiments are available:
-    - Find most stable words in each ArXiv category (cs, math, cond-mat, physics)
-    - Find most unstable (changed) words in earch category
-    - Finds stable/unstable words across categories
-    - Using different alignment strategies
-"""
+#%%
+num = 2
+model = Word2Vec.load(f'wordvectors/senses/semeval_corpus{num}.vec')
 
-with open('../Masking/work/data/structs/coca_sents.dat', 'rb') as f:
-    sentences = pickle.load(f)
-
-sentences = random.sample(sentences, 10000000)
-
-sense_words = ['supplements', 'variance', 'flats', 'meters', 'mixer', 'web', 'receiver']
-stops = list(set(stopwords.words("english")))
-
-for target in sense_words:
-    with open(f'../Masking/work/data/sense_results/500_{target}_sense_sentences.dat', 'rb') as f:
-        sentences += pickle.load(f)
-
-clean_sents = []
-for sent in sentences:
-    clean_sent = [word for word in sent.split() 
-                  if (word not in stops + sense_words) and (len(word) >= 3)]
-    clean_sents.append(clean_sent)
-
-model = Word2Vec(clean_sents, max_vocab_size=100000, min_count=5)
-model.save('wordvectors/senses/us.vec')
+sense_words = ['circle', 'edge', 'head', 'land', 
+                'lass', 'rag', 'thump', 'tip',
+                'multitude', 'risk', 'twist', 'savage']
 
 vocab = list(model.wv.index_to_key)
 print(len(vocab))
-filtered = [word for word in vocab if '_' in word]
+
+filtered = [word for word in vocab if '.' in word]
 print(len(filtered))
 
 path_out = "results/usuk/"
@@ -188,9 +169,9 @@ d = np.zeros((len(filtered)))
 for i, w in enumerate(filtered):
     # Compute mean vector
     word = w.split('_')[0]
-    v_mean = np.mean([wva[w], wvb[word]], axis=0)
+    v_mean = np.mean([r[w], wvb[word]], axis=0)
     # Compute distances to the mean
-    distances = [np.linalg.norm(v_mean-wv)**2 for wv in [wva[w], wvb[word]]]
+    distances = [np.linalg.norm(v_mean-wv)**2 for wv in [r[w], wvb[word]]]
     d[i] = np.mean(distances)
 
 
