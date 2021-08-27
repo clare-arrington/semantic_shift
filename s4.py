@@ -12,25 +12,30 @@ there. Alternatively, one can start from random landmarks."""
 
 # Third party modules
 import numpy as np
-import tensorflow as tf
-from tensorflow import keras
 from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import accuracy_score, log_loss
 from scipy.spatial.distance import cosine, euclidean
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+
+import tensorflow as tf
+from tensorflow import keras
 
 # Local modules
 from WordVectors import WordVectors, intersection
 from alignment import align
 
-
 # Initialize random seeds
 np.random.seed(1)
 tf.random.set_seed(1)
 
-# TODO: does this work on suppressing opt loop fail?
-# tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+## Does this remove the NUMA node warning?
+gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+for device in gpu_devices:
+    tf.config.experimental.set_memory_growth(device, True)
+
 
 def negative_samples(words, size, p=None):
     """
@@ -267,7 +272,7 @@ def threshold_crossvalidation(wv1, wv2, iters=100,
             if acc > best_acc:
                 best_acc = acc
                 best_t = t_
-                print("- New best t", t_, acc)
+                #print(f"- New best t: {t_:.2f}, {int(acc*100)}%")
 
     return best_t
 
@@ -326,7 +331,6 @@ def s4(wv1, wv2, verbose=0, plot=0, cls_model="nn",
             return None
 
     wv2_original = WordVectors(words=wv2.words, vectors=wv2.vectors.copy())
-
 
     avg_window = 0  # number of iterations to use in running average
 
@@ -433,7 +437,11 @@ def s4(wv1, wv2, verbose=0, plot=0, cls_model="nn",
         cumulative_alignment_hist.append(np.mean(alignment_loss_hist[-avg_window:]))
 
         # out loss
-        alignment_out_loss = np.linalg.norm(v1_out-v2_out)**2/len(v1_out)
+        if len(non_landmarks) == 0:
+            alignment_out_loss = 0
+        else:
+            alignment_out_loss = np.linalg.norm(v1_out-v2_out)**2/len(v1_out)
+
         alignment_out_hist.append(alignment_out_loss)
         cumulative_out_hist.append(np.mean(alignment_out_hist[-avg_window:]))
 
