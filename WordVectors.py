@@ -1,9 +1,10 @@
-import numpy as np
+from typing import List, Tuple, Optional, NamedTuple
 from collections import OrderedDict
+from gensim.models import Word2Vec
 from sklearn import preprocessing
+import numpy as np
 
-
-# This file contains the WordVectors class used to load and handle word embeddings
+## This file contains the WordVectors class used to load and handle word embeddings
 def intersection(*args):
     """
     This function returns the intersection between WordVectors objects
@@ -30,7 +31,6 @@ def intersection(*args):
         wv_out.append(WordVectors(words=words, vectors=[wv[w]for w in words]))
 
     return wv_out
-
 
 def union(*args, f="average"):
     """
@@ -60,9 +60,7 @@ def union(*args, f="average"):
 
     return wv_out
 
-
-# Implements a WordVector class that performs mapping of word tokens to vectors
-# Stores words as
+## Implements a WordVector class that performs mapping of word tokens to vectors
 class WordVectors:
     """
     WordVectors class containing methods for handling the mapping of words
@@ -201,3 +199,32 @@ class WordVectors:
             for word, vec in zip(self.words, self.vectors):
                 v_string = " ".join(map(str, vec))
                 fout.write("%s %s\n" % (word, v_string))
+
+# wv1 is the one that will be aligned to wv2
+def load_wordvectors(dataset_name: str, align_vector: NamedTuple, anchor_vector: NamedTuple) \
+    -> Tuple[WordVectors, WordVectors, Optional[Word2Vec]]  :
+
+    ## Get needed information
+    wv1_name = align_vector.corpus_name
+    wv2_name = anchor_vector.corpus_name
+
+    ## Original is in WordVector format
+    if align_vector.type == 'original':
+        wv1 = WordVectors(input_file=f"wordvectors/{dataset_name}/original_{wv1_name}.vec")
+        wv2 = WordVectors(input_file=f"wordvectors/{dataset_name}/original_{wv2_name}.vec")
+        
+        return wv1, wv2, None
+
+    ## Newly trained models are in Word2Vec format and must be reformatted
+    else:
+        ## Load first model - can be either normal or sense
+        model_1 = Word2Vec.load(f'wordvectors/{dataset_name}/{align_vector.type}_{wv1_name}.vec')
+        vocab_1 = list(model_1.wv.index_to_key)
+        wv1 = WordVectors(words=vocab_1, vectors=model_1.wv.get_normed_vectors())
+
+        ## Load second model - cannot be a sense model
+        model_2 = Word2Vec.load(f'wordvectors/{dataset_name}/new_{wv2_name}.vec')
+        wv2 = WordVectors(words=list(model_2.wv.index_to_key), vectors=model_2.wv.get_normed_vectors())
+
+        return wv1, wv2, model_1
+
