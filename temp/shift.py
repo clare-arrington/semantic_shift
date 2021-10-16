@@ -24,8 +24,8 @@ import tensorflow as tf
 from tensorflow import keras
 
 # Local modules
-from WordVectors import WordVectors, intersection
-from alignment import align
+from temp.wordvectors import WordVectors, intersection
+from temp.alignment import align
 
 # Initialize random seeds
 np.random.seed(1)

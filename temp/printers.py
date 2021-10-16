@@ -8,11 +8,14 @@ def print_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame,
     with open(f'{path_out}/senses.txt', 'w') as fout:
 
         print('Sense breakdown for each target word with:', file=fout)
-        print(f'\t - cosine distance of sense in aligned vector {align_vector.description} \
-                \n\t to target word in unchanged vector {anchor_vector.description}', file=fout)
-        print(f'\t - count of sense in aligned vector {align_vector.description}\n', file=fout)
+        print(f'\t - cosine distance of sense in aligned vector {align_vector.desc} \
+                \n\t to target word in unchanged vector {anchor_vector.desc}', file=fout)
+        print(f'\t - count of sense in aligned vector {align_vector.desc}\n', file=fout)
 
-        print(f'Distance threshold = {threshold:.2f}', file=fout)
+        print('Format for each target is...', file=fout)
+        print('target : true label', file=fout)
+        print('\tSense # : cos. dist, count, threshold label', file=fout)
+        print(f'\nDistance threshold = {threshold:.2f}', file=fout)
 
         for target, info in sense_dists.items():        
             is_shifted = results[results.Words == target]['True Label'].iloc[0]
@@ -23,7 +26,12 @@ def print_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame,
             
             sense_sorted = sorted(info, key=lambda tup: tup[0])
             for sense, dist, count, _ in sense_sorted:
-                print(f'\tSense {sense[-1]} : {dist:.2f}, {count}', file=fout)
+                if dist > threshold:
+                    is_shifted = 'shifted'
+                else:
+                    is_shifted = 'not shifted'
+
+                print(f'\tSense {sense[-1]} : {dist:.2f}, {count}, {is_shifted}', file=fout)
 
 def print_shift_info(accuracies: Dict[str,float], results: pd.DataFrame, path_out: str, 
                      align_method: str, classify_method: str, threshold: float,
@@ -31,11 +39,11 @@ def print_shift_info(accuracies: Dict[str,float], results: pd.DataFrame, path_ou
 
     with open(f'{path_out}/accuracies.txt', 'w') as fout:
         if align_vector.type == 'sense':
-            print(f'Sense induction on {align_vector.description}', file=fout)
+            print(f'Sense induction on {align_vector.desc}', file=fout)
         else:
-            print(f'{align_vector.type.capitalize()} {align_vector.description}', file=fout)
+            print(f'{align_vector.type.capitalize()} {align_vector.desc}', file=fout)
 
-        print(f'Aligned to {anchor_vector.type} {anchor_vector.description}\n', file=fout)
+        print(f'Aligned to {anchor_vector.type} {anchor_vector.desc}\n', file=fout)
         print(f'{align_method.capitalize()} alignment; {classify_method} classification\n', file=fout)
         
         if classify_method == 'cosine':
@@ -43,7 +51,7 @@ def print_shift_info(accuracies: Dict[str,float], results: pd.DataFrame, path_ou
 
         ## Get the highest accuracy and print all methods that achieved it
         max_acc = max(accuracies.values())
-        print(f'Methods with highest accuracy of {max_acc:.2f}', file=fout)
+        print(f'\nMethods with highest accuracy of {max_acc:.2f}', file=fout)
         for label, accuracy in accuracies.items():
             ## Fix this in the earlier part          
             if accuracy == max_acc:

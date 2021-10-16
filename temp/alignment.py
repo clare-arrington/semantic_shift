@@ -1,7 +1,7 @@
  
 from scipy.linalg import orthogonal_procrustes
 import numpy as np
-from WordVectors import WordVectors
+from temp.wordvectors import WordVectors
 
 # Word alignment module
 def align(wv1, wv2, anchor_indices=None, anchor_words=None, anchor_top=None,

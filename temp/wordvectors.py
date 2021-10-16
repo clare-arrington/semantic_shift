@@ -32,6 +32,11 @@ def intersection(*args):
 
     return wv_out
 
+def set_subtraction(wv, targets):
+    words = [w for w in set(wv.words) if w not in targets]
+    wv_out = WordVectors(words=words, vectors=[wv[w]for w in words])
+    return wv_out
+
 def union(*args, f="average"):
     """
     Performs union of two or more word vectors, returning a new WordVectors
@@ -200,31 +205,44 @@ class WordVectors:
                 v_string = " ".join(map(str, vec))
                 fout.write("%s %s\n" % (word, v_string))
 
+## TODO: maybe think on names more
+## Contains the descriptive information and all the variants of the same wordvector
+class VectorVariations:
+    def __init__(self, corpus_name, desc, type=None):
+        self.corpus_name=corpus_name
+        self.desc=desc
+        self.type=type
+
+        self.normal_vec=None
+        self.model=None
+        self.partial_align_vec=None
+        self.post_align_vec=None
+
+def reformat_loaded_wordvector(vector, dataset_name):
+    vector.model = Word2Vec.load(f'/home/clare/Data/word_vectors/{dataset_name}/{vector.type}/{vector.corpus_name}.vec')
+    vocab = list(vector.model.wv.index_to_key)
+    vectors = vector.model.wv.vectors
+    vector.normal_vec = WordVectors(words=vocab, vectors=vectors)
+
+    return vector
+
+# TODO: would I like to pass in filenames instead?
 # wv1 is the one that will be aligned to wv2
-def load_wordvectors(dataset_name: str, align_vector: NamedTuple, anchor_vector: NamedTuple) \
-    -> Tuple[WordVectors, WordVectors, Optional[Word2Vec]]  :
+def load_wordvectors(dataset_name: str, 
+    align_vector: VectorVariations, anchor_vector: VectorVariations):
 
-    ## Get needed information
-    wv1_name = align_vector.corpus_name
-    wv2_name = anchor_vector.corpus_name
-
-    ## Original is in WordVector format
+    ## Original is in WordVector format already
     if align_vector.type == 'original':
-        wv1 = WordVectors(input_file=f"wordvectors/{dataset_name}/original_{wv1_name}.vec")
-        wv2 = WordVectors(input_file=f"wordvectors/{dataset_name}/original_{wv2_name}.vec")
+        align_name = align_vector.corpus_name
+        align_vector.normal_vec = WordVectors(input_file=f"/home/clare/Data/word_vectors/{dataset_name}/original/{align_name}.vec")
         
-        return wv1, wv2, None
-
+        anchor_name = anchor_vector.corpus_name
+        anchor_vector.normal_vec = WordVectors(input_file=f"/home/clare/Data/word_vectors/{dataset_name}/original/{anchor_name}.vec")
+        
     ## Newly trained models are in Word2Vec format and must be reformatted
     else:
-        ## Load first model - can be either normal or sense
-        model_1 = Word2Vec.load(f'wordvectors/{dataset_name}/{align_vector.type}_{wv1_name}.vec')
-        vocab_1 = list(model_1.wv.index_to_key)
-        wv1 = WordVectors(words=vocab_1, vectors=model_1.wv.get_normed_vectors())
-
-        ## Load second model - cannot be a sense model
-        model_2 = Word2Vec.load(f'wordvectors/{dataset_name}/new_{wv2_name}.vec')
-        wv2 = WordVectors(words=list(model_2.wv.index_to_key), vectors=model_2.wv.get_normed_vectors())
-
-        return wv1, wv2, model_1
+        align_vector = reformat_loaded_wordvector(align_vector, dataset_name)
+        anchor_vector = reformat_loaded_wordvector(anchor_vector, dataset_name)
+    
+    return align_vector, anchor_vector
 
