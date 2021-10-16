@@ -1,30 +1,34 @@
  
 #%%
-from WordVectors import WordVectors, load_wordvectors, intersection
-from s4 import s4, threshold_crossvalidation
-from printers import print_sense_output, print_shift_info
-from alignment import align
+from temp.predictions import make_sense_prediction, assess_sense_prediction, assess_standard_prediction
+from temp.shift import s4, threshold_crossvalidation
+from temp.wordvectors import VectorVariations, WordVectors, load_wordvectors, intersection, set_subtraction
+from temp.printers import print_sense_output, print_shift_info
+from temp.alignment import align
 
 from scipy.spatial.distance import cosine
-from sklearn.metrics import accuracy_score
 
 from typing import Tuple, NamedTuple, List, Dict
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 import pathlib
+import pickle
 import numpy as np
-import pandas as pd
 import re
 
 Vector_Info = namedtuple('Vector_Info', ['corpus_name', 'description', 'type'])
 Target_Info = namedtuple('Target', ['word', 'shifted_word', 'is_shifted'])
-# Prediction_Info = namedtuple('Prediction', )
 
-## Parse through the targets to match them up if 
-def make_word_pairs(vector_type: str, vocab: List[str], targets: NamedTuple):
+## Parse through the targets to match them up 
+def make_word_pairs(
+    vector_type: str, 
+    vocab: List[str], 
+    targets: NamedTuple):
+
     word_pairs = []
-    if vector_type in ['original', 'new']:
+    if vector_type in ['original', 'new', 'both_sense']:
         for target in targets:
             word_pairs.append((target.word, target.shifted_word))
+
     else:
         sense_words = [word for word in vocab if '.' in word]
         print(f'{len(sense_words)} filtered senses\n')
@@ -33,221 +37,175 @@ def make_word_pairs(vector_type: str, vocab: List[str], targets: NamedTuple):
             r = re.compile(f'{target.word}.[0-9]')
             for sense in filter(r.match, sense_words):
                 word_pairs.append((sense, target.shifted_word))
+
     return word_pairs
 
-def get_aligned_dists(align_method: str, classify_methods: Dict[str, float], 
-                      word_pairs: Tuple[str, str], wordvec1: WordVectors, wordvec2: WordVectors):
+def remove_targets(
+    targets: List[NamedTuple], 
+    align_wv: VectorVariations, 
+    anchor_wv: VectorVariations):
+
+    if align_wv.type != 'both_sense':
+        remove_targets = []
+        for index, target in enumerate(targets):
+            if align_wv.type == 'sense':
+                if f'{target.word}.0' not in align_wv.normal_vec.words:
+                    print(f'{target.word}.0 missing from {align_wv.corpus_name}')
+                    remove_targets.append(index)
+            else:
+                if target.word not in align_wv.normal_vec.words:
+                    print(f'{target.word} missing from {align_wv.corpus_name}')
+                    remove_targets.append(index)
+
+            if target.shifted_word not in anchor_wv.normal_vec.words:
+                print(f'{target.shifted_word} ({target.word}) missing from {anchor_wv.corpus_name}')
+                remove_targets.append(index)
+
+        for index in sorted(remove_targets, reverse=True):
+            # print(f'Deleting {targets[index].word}')
+            del targets[index]
+
+    else:
+        sense_targets = []
+        all_vocab = set(align_wv.normal_vec.words + anchor_wv.normal_vec.words)
+        sense_words = sorted([word for word in all_vocab if '.' in word])
+        print("Removing words that aren't in one or both embeddings")
+        for word in sense_words:
+            if word not in align_wv.normal_vec.words:
+                print(f'\t{word} : {align_wv.corpus_name}')
+
+            elif word not in anchor_wv.normal_vec.words:
+                print(f'\t{word} : {anchor_wv.corpus_name}')
+            
+            else:
+                # TODO: label
+                sense_targets.append(Target_Info(word, word, 0))
+
+        targets = sense_targets
+
+    print(f'\nRunning test on {len(targets)} targets')
+
+    return targets
+
+def align_vectors(
+    align_method: str, align_params, word_pairs: Tuple[str, str], 
+    align_wv: VectorVariations, anchor_wv: VectorVariations, filter_targets=False):
     
-    wv1, wv2 = intersection(wordvec1, wordvec2)
-    print("Size of common vocab.", len(wv1))
+    ## Make sure targets are removed from alignment and then intersect the two embeddings
+    if filter_targets:  
+        wv1 = set_subtraction(align_wv.normal_vec, [wp[0] for wp in word_pairs])
+    else:
+        wv1 = align_wv.normal_vec
+
+    wv1, wv2 = intersection(wv1, anchor_wv.normal_vec)
+    print("Size of common vocab:", len(wv1))
 
     ## Get landmarks
     print(f'Starting {align_method} aligning')
     if align_method == 'global':
         landmarks = wv1.words
     elif align_method == 's4':
-        align_params = {
-                "n_targets": 100,
-                "n_negatives": 10,
-                "rate": .25
-            }
-
         landmarks, non_landmarks, Q = s4(wv1, wv2, cls_model="nn", verbose=0, **align_params)
         print('Done with S4 aligning')
 
     ## Align
     wv1_, wv2_, Q = align(wv1, wv2, anchor_words=landmarks)
+    align_wv.partial_align_vec = wv1_
+    anchor_wv.partial_align_vec = wv2_
 
     ## Align the original so that it matches wv1_ but has its full vocab
-    aligned_wv = WordVectors(words=wordvec1.words, vectors=np.dot(wordvec1.vectors, Q))
-    anchored_wv = wordvec2
+    align_wv.post_align_vec = WordVectors(words=align_wv.normal_vec.words, vectors=np.dot(align_wv.normal_vec.vectors, Q))
+    anchor_wv.post_align_vec = anchor_wv.normal_vec
+
+    return landmarks, align_wv, anchor_wv
+
+def get_target_distances(
+        classify_method_thresholds: Dict[str, float], cls_params,
+        word_pairs: Tuple[str, str], landmarks,
+        align_wv: VectorVariations, anchor_wv: VectorVariations    
+        ):
 
     ## If not sense, dists will be 1 to 1 for each target
     ## If there are senses it will be 1 to many for each target 
     target_dists = {}
-    if 'cosine' in classify_methods:
+
+    if 'cosine' in classify_method_thresholds:
         print('Starting cosine predicting')
-        if classify_methods['cosine'] == 0:
-            auto_params = {"rate": 1.5,
-                        "n_fold": 1,
-                        "n_targets": 50,
-                        "n_negatives": 100}
-            classify_methods['cosine'] = threshold_crossvalidation(wv1_, wv2_, iters=2, **auto_params, landmarks=landmarks)
+        if classify_method_thresholds['cosine'] == 0:
+            auto_params = { "rate": 1.5,
+                            "n_fold": 1,
+                            "n_targets": 50,
+                            "n_negatives": 100}
+
+            classify_method_thresholds['cosine'] = threshold_crossvalidation(
+                align_wv.partial_align_vec, anchor_wv.partial_align_vec, 
+                **auto_params, landmarks=landmarks)
 
         dists = []
         for align_word, anchor_word in word_pairs:
-            dist = cosine(aligned_wv[align_word], anchored_wv[anchor_word])
+            dist = cosine(align_wv.post_align_vec[align_word], anchor_wv.post_align_vec[anchor_word])
             dists.append(dist)
 
         target_dists['cosine'] = np.array(dists) 
 
-    if 's4' in classify_methods:
+    if 's4' in classify_method_thresholds:
         print('Starting S4 predicting')
-        cls_params = {'n_targets':1000, 'n_negatives':1000, 'rate':0.25}
-        model = s4(wv1_, wv2_, landmarks=landmarks, verbose=0, **cls_params, update_landmarks=False)
+        model = s4(align_wv.partial_align_vec, align_wv.partial_align_vec, landmarks=landmarks, verbose=0, **cls_params, update_landmarks=False)
 
         # Concatenate vectors of target words for prediction
         target_vectors = []
         for align_word, anchor_word in word_pairs:
             # x = np.array([np.concatenate((aligned_wv[align_word], anchored_wv[anchor_word]))])
-            x = (aligned_wv[align_word], anchored_wv[anchor_word])
+            x = (align_wv.post_align_vec[align_word], anchor_wv.post_align_vec[anchor_word])
             target_vectors.append(np.concatenate(x))
 
         target_vectors = np.array(target_vectors)
         dists = model.predict(target_vectors).flatten()
-        print(f'Target vector size {dists.shape}')
+        # print(f'Target vector size {dists.shape}')
 
         target_dists['s4'] = dists
 
-    return target_dists, classify_methods
-
-def assess_standard_prediction(predictions, threshold: float, targets: List[NamedTuple]):
-    target_words, _, true_labels = list(zip(*targets))    
-
-    predictions = predictions > threshold
-    accuracy = accuracy_score(true_labels, predictions)
-    accuracies = {'Predicted' : accuracy}
-
-    results = pd.DataFrame(data={'Words' : target_words, 'True Label' : true_labels, 'Predicted' : predictions})
-    
-    for label in ['True Label', 'Predicted']:
-        results[label] = results[label].astype(int).map({0:'No Shift', 1:'Shifted'})
-
-    return accuracies, results
-
-def make_sense_prediction(predictions, threshold, model, word_pairs):
-    ## Go through each sense from the sense embedding (word.#) and find its distance to the word 
-    ## connected to it in the anchored embedding
-    ## This could be the same word, a translated word, etc
-    prediction_info = defaultdict(list)
-    for word_pair, dist in zip(word_pairs, predictions):
-        sense_word, anchor_word = word_pair
-        shift_prediction = int(dist > threshold)
-        word_count = model.wv.get_vecattr(sense_word, "count")
-        target = sense_word.split('.')[0]
-
-        info = (sense_word, dist, word_count, shift_prediction)
-        prediction_info[target].append(info)
-
-    # TODO: this could be passed in maybe? eh
-    shift_labels = ['Majority', 'Main', 'Weighted']
-    shift_data = {shift : [] for shift in shift_labels}
-
-    ratios = [.05, .1, .15, .2]
-    ratio_data = defaultdict(list)
-
-    for target, sense_predictions in prediction_info.items():
-        
-        shifted_count = 0
-        unshifted_count = 0
-        weighted_dist = 0
-        shifts = []
-
-        for sense, dist, count, shift_prediction in sense_predictions:
-            weighted_dist += (dist * count)
-
-            shifts.append(shift_prediction)
-            if shift_prediction:
-                shifted_count += count
-            else:
-                unshifted_count += count
-
-        majority_cutoff = len(shifts) // 2
-        is_shifted = sum(shifts) > majority_cutoff
-        shift_data['Majority'].append(is_shifted)
-
-        # TODO: may have to convert to bool?
-        biggest_sense = max(sense_predictions, key=lambda t: t[2])
-        is_shifted = biggest_sense[3]
-        shift_data['Main'].append(is_shifted)
-
-        weighted_dist /= (shifted_count + unshifted_count)
-        is_shifted = weighted_dist > threshold
-        shift_data['Weighted'].append(is_shifted)
-
-        ratio = shifted_count / (shifted_count + unshifted_count)
-        for ratio_cutoff in ratios:
-            is_shifted = ratio >= ratio_cutoff
-            ratio_cutoff = f'{int(ratio_cutoff*100)}%'
-            ratio_data[ratio_cutoff].append(is_shifted)
-
-    return prediction_info, shift_data, ratio_data
-
-def assess_sense_prediction(shift_data, ratio_data, targets: List[NamedTuple]):
-    
-    target_words, _, true_labels = list(zip(*targets))    
-
-    ## Assess predictions
-    accuracies = {}
-    for method, shift_pred in shift_data.items():
-        accuracy = accuracy_score(true_labels, shift_pred)
-        print(f'{method} accuracy: {accuracy:.2f}')
-        accuracies[method] = accuracy
-
-    for ratio_cutoff, shift_pred in ratio_data.items():
-        accuracy = accuracy_score(true_labels, shift_pred)
-        print(f'{ratio_cutoff} ratio accuracy: {accuracy:.2f}')
-        accuracies[ratio_cutoff] = accuracy
-
-    data = {'Words' : target_words, 'True Label' : true_labels}
-    data.update(shift_data)
-    data.update(ratio_data)
-    results = pd.DataFrame(data)
-
-    for label in results.columns:
-        if label != 'Words':
-            results[label] = results[label].astype(int).map({0:'No Shift', 1:'Shifted'})
-
-    return accuracies, results
+    return target_dists, classify_method_thresholds
 
 # %%
-## TODO: rename this
-def temp(align_method: str, classify_methods: Dict[str, float], dataset_name: str, 
-         align_vector: NamedTuple, anchor_vector: NamedTuple, targets: List[NamedTuple],
-         num_loops: int = 1):
+def predict_target_shift(
+        align_method: str, align_params, 
+        classify_method_thresholds: Dict[str, float], classify_params, 
+        dataset_name: str, targets: List[NamedTuple],
+        align_wv: VectorVariations, anchor_wv: VectorVariations,
+        output_path: str, num_loops):
 
-    wordvec1, wordvec2, model1 = load_wordvectors(dataset_name, align_vector, anchor_vector)
+    print('\n================================')
+    print(f'Starting run for {align_method}, {align_wv.type}')
 
-    remove_targets = []
-    for index, target in enumerate(targets):
-        if align_vector.type == 'sense':
-            if f'{target.word}.0' not in wordvec1.words:
-                print(f'{target.word}.0 missing from {align_vector.corpus_name}')
-                remove_targets.append(index)
-        else:
-            if target.word not in wordvec1.words:
-                print(f'{target.word} missing from {align_vector.corpus_name}')
-                remove_targets.append(index)
+    ## Pull and prep vector data
+    align_wv, anchor_wv = load_wordvectors(dataset_name, align_wv, anchor_wv)
+    targets = remove_targets(targets, align_wv, anchor_wv)
+    word_pairs = make_word_pairs(align_wv.type, align_wv.normal_vec.words, targets)
 
-        if target.shifted_word not in wordvec2.words:
-            print(f'{target.shifted_word} ({target.word}) missing from {anchor_vector.corpus_name}')
-            remove_targets.append(index)
-
-    for index in sorted(remove_targets, reverse=True):
-        # print(f'Deleting {targets[index].word}')
-        del targets[index]
-
-    print(f'Running test on {len(targets)} targets')
-
-    word_pairs = make_word_pairs(align_vector.type, wordvec1.words, targets)
-
-    # TODO: could import this
-    best_accuracies = {clf_method : 0 for clf_method in classify_methods}
-    all_accuracies = {clf_method : [] for clf_method in classify_methods}
+    # TODO: could import this if I wanted to not overwrite a previous best
+    best_accuracies = {clf_method : 0 for clf_method in classify_method_thresholds}
+    all_accuracies = {clf_method : [] for clf_method in classify_method_thresholds}
 
     for i in range(num_loops):
-
         print(f'{i+1} / {num_loops}')
 
-        dists, classify_methods = get_aligned_dists(align_method, classify_methods, 
-                                                          word_pairs, wordvec1, wordvec2)
+        landmarks, align_wv, anchor_wv = align_vectors(
+                                            align_method, align_params,
+                                            word_pairs, align_wv, anchor_wv)
 
-        for classify_method, threshold in classify_methods.items():
-            if align_vector.type in ['original', 'new']: 
+        dists, classify_method_thresholds = get_target_distances(
+                                    classify_method_thresholds, classify_params, 
+                                    word_pairs, landmarks, 
+                                    align_wv, anchor_wv)
+
+        for classify_method, threshold in classify_method_thresholds.items():
+
+            if align_wv.type in ['original', 'new']: 
                 accuracies, results = assess_standard_prediction(dists[classify_method], threshold, targets)
-
-            elif align_vector.type == 'sense':
-                prediction_info, shift_data, ratio_data = make_sense_prediction(dists[classify_method], threshold, model1, word_pairs)
+            
+            elif 'sense' in align_wv.type:
+                prediction_info, shift_data, ratio_data = make_sense_prediction(dists[classify_method], threshold, align_wv.model, word_pairs)
                 accuracies, results = assess_sense_prediction(shift_data, ratio_data, targets)
             
             all_accuracies[classify_method].append(accuracies)
@@ -257,14 +215,17 @@ def temp(align_method: str, classify_methods: Dict[str, float], dataset_name: st
                 print(f'Found new best accuracy {max_acc:.2f} for {classify_method}, so printing info')
                 best_accuracies[classify_method] = max_acc
 
-                path_out = f"results/{dataset_name}/{align_vector.type}/{align_method}_{classify_method}"
+                path_out = f"{output_path}/{align_method}_{classify_method}"
                 pathlib.Path(path_out).mkdir(parents=True, exist_ok=True)
 
-                if align_vector.type == 'sense':
-                    print_sense_output(prediction_info, results, threshold, path_out, align_vector, anchor_vector)
+                if 'sense' in align_wv.type :
+                    print_sense_output(prediction_info, results, threshold, path_out, align_wv, anchor_wv)
                 
-                print_shift_info(accuracies, results, path_out, align_method, classify_method, threshold, align_vector, anchor_vector)
+                print_shift_info(accuracies, results, path_out, align_method, classify_method, threshold, align_wv, anchor_wv)
                 results.to_csv(f"{path_out}/labels.csv", index=False)
+
+                with open(f'{output_path}/{align_method}_landmarks.dat' , 'wb') as pf:
+                    pickle.dump(landmarks, pf)
 
     print('Tests complete!')
     for classify_method, accuracy in best_accuracies.items():
@@ -272,5 +233,126 @@ def temp(align_method: str, classify_methods: Dict[str, float], dataset_name: st
 
     return all_accuracies
 
-if __name__=="__main__":
-    print('')
+#%%
+## TODO: add a sweep dict to pass the other params
+
+## If we expect the embeddings to be similar, the number of targets would be lower.
+## 
+def align_param_sweep(
+    dataset_name, targets, num_loops, output_path,
+    align_wv, anchor_wv, align_method,
+    classify_params, classify_method_thresholds,
+    n_targets=[50, 100], # possible landmarks; amount shift is simulated on
+    n_negatives=[50, 100], 
+    rates=[.1, .25], # how much a word is shifted when simulated
+    ):
+
+        parameter_sweep = {}
+        for n_target in n_targets:
+            for n_negs in n_negatives:
+                for rate in rates:
+
+                    align_params = {"n_targets": n_target,
+                                    "n_negatives": n_negs,
+                                    "rate": rate
+                                    }
+
+                    print(f'\n\nRunning {n_target} targets, {n_negs} negatives, {rate}', end='')
+
+                    parameter_sweep[(n_target, n_negs, rate)] = \
+                            predict_target_shift(align_method, align_params, 
+                                classify_method_thresholds, classify_params,
+                                dataset_name, targets,
+                                align_wv, anchor_wv, 
+                                output_path, num_loops)
+
+        return parameter_sweep
+
+## TODO: these could be combined to one b/c the params are the same
+## TODO: class sweeps could be done on the same alignment :/ maybe break it up so it can do that then sweep?
+def classify_param_sweep(
+    dataset_name, targets, num_loops, output_path,
+    align_wv, anchor_wv, align_method,
+    align_params, classify_method_thresholds,
+    n_targets=[100, 250, 500, 750],
+    n_negatives=[100, 250, 500, 750],
+    rates=[.1, .25],
+    ):
+
+        parameter_sweep = {}
+        for n_target in n_targets:
+            for n_negs in n_negatives:
+                for rate in rates:
+
+                    classify_params = { "n_targets": n_target,
+                                        "n_negatives": n_negs,
+                                        "rate": rate
+                                    }
+
+                    print(f'\n\nRunning {n_target} targets, {n_negs} negatives, {rate}', end='')
+
+                    parameter_sweep[(n_target, n_negs, rate)] = \
+                            predict_target_shift(align_method, align_params, 
+                                classify_method_thresholds, classify_params,
+                                dataset_name, targets,
+                                align_wv, anchor_wv, 
+                                output_path, num_loops)
+
+        return parameter_sweep
+
+## align_info should be (name, desc)
+## TODO: maybe the params like this is cursed ?
+def main(dataset_name:str, targets: List[Target_Info],
+    align_info, anchor_info, 
+    num_loops: int = 1,
+    align_params=None, 
+    classify_params=None, 
+    classify_method_thresholds={'cosine': 0, 's4': .5},
+    vector_types=['new', 'sense'], 
+    align_methods=['global', 's4']):
+
+    for vector_type in vector_types:
+        for align_method in align_methods:
+            if vector_type in ['original', 'new', 'both_sense']:
+                align_type = vector_type
+                anchor_type = vector_type
+            
+            elif vector_type == 'sense':
+                align_type = vector_type
+                anchor_type = 'new'
+
+            align_wv = VectorVariations(corpus_name = align_info[0],
+                                    desc = align_info[1], 
+                                    type = align_type)
+            anchor_wv = VectorVariations(corpus_name = anchor_info[0],
+                                        desc = anchor_info[1], 
+                                        type = anchor_type)
+
+            output_path = f'/home/clare/Data/align_results/{dataset_name}/align_{align_info[0]}/{vector_type}'
+            pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
+
+            if (align_params is None) and (align_method == 's4'):
+                all_accs = align_param_sweep(
+                            dataset_name, targets, num_loops, output_path,
+                            align_wv, anchor_wv, align_method,
+                            classify_params, classify_method_thresholds)
+                save_file_name = f'{align_method}_align_param_sweep'
+
+            elif (classify_params is None) and ('s4' in classify_method_thresholds):
+                all_accs = classify_param_sweep(
+                            dataset_name, targets, num_loops, output_path,
+                            align_wv, anchor_wv, align_method,
+                            align_params, classify_method_thresholds)
+                save_file_name = f'{align_method}_classify_param_sweep'
+
+            else:
+                all_accs = predict_target_shift(align_method, align_params, 
+                                classify_method_thresholds, classify_params,
+                                dataset_name, targets,
+                                align_wv, anchor_wv, 
+                                output_path, num_loops)
+                save_file_name = align_method
+            
+            print(f'Results will be saved to {output_path}')
+            with open(f'{output_path}/{save_file_name}.dat' , 'wb') as pf:
+                pickle.dump(all_accs, pf)
