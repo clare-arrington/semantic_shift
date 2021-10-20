@@ -1,5 +1,5 @@
 #%%
-from base_experiment import classify_param_sweep, main, Target_Info
+from base_experiment import main, Target_Info, Train_Method_Info
 
 with open('/home/clare/Data/corpus_data/semeval/truth/binary.txt') as fin:
     og_targets = fin.read().strip().split('\n')
@@ -19,11 +19,10 @@ dataset_name = 'semeval'
 anchor_info = ('ccoha2_both', 'CCOHA 1960 - 2010')
 align_info = ('ccoha1_both', 'CCOHA 1810 - 1860')
 
+#%%
 # Results from paper
 # .7 for english
-# s4 align - cosine (maybe better if s4 classify)
 # align old to new
-## see if its okay this way from 
 
 ## This is only align for S4, not cosine
 align_params = {"n_targets": 100,
@@ -32,21 +31,30 @@ align_params = {"n_targets": 100,
                 "iters": 100
                 }
 
-# classify_param = {"n_targets": 500,
-#                   "n_negatives": 750,
-#                   "rate": .25
-#                   }
+classify_params = {"n_targets": 500,
+                  "n_negatives": 750,
+                  "rate": .25
+                  }
 
-## TODO: attach params to methods
-## Make methods for both as dicts
+auto_params = { "rate": 1.5,
+                "n_fold": 1,
+                "n_targets": 50,
+                "n_negatives": 100}
+
+align_methods = [
+    Train_Method_Info('global', None),
+    Train_Method_Info('s4', align_params)
+]
+
+classify_methods = [
+    Train_Method_Info('cosine', auto_params, 0)
+    # Train_Method_Info('s4', classify_params, .5)
+]
 
 #%%
 main(dataset_name, targets,
      align_info, anchor_info,
-     align_methods=['global', 's4'],
-     classify_method_thresholds={'cosine':0},
+     align_methods, classify_methods,
      vector_types=['both_sense'],
-     align_params=align_params,
-     num_loops=10,
-     classify_params=None)
+     num_loops=10)
 # %%
