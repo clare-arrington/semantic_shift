@@ -1,9 +1,15 @@
 #%%
 from base_experiment import main, Target_Info, Train_Method_Info
+import pandas as pd
 
+target_data = f'/home/clare/Data/masking_results/semeval/ccoha1_extra/target_sense_labels.csv'
+target_data = pd.read_csv(target_data, usecols=['target'])
+all_targets = [t for t in target_data.target.unique()]
+
+targets = []
+skip = []
 with open('/home/clare/Data/corpus_data/semeval/truth/binary.txt') as fin:
     og_targets = fin.read().strip().split('\n')
-    targets = []
     for target in og_targets:
         target, label = target.split('\t')
         label = bool(int(label))
@@ -11,13 +17,20 @@ with open('/home/clare/Data/corpus_data/semeval/truth/binary.txt') as fin:
 
         target = Target_Info(word=word, shifted_word=target, is_shifted=label)
         targets.append(target)
+        skip.append(word)
 
+for target in all_targets:
+    if target in skip:
+        continue
+    target = Target_Info(word=target, shifted_word=target, is_shifted=None)
+    targets.append(target)
+        
 print(f'{len(targets)} targets loaded')
 
 ## Data Info
 dataset_name = 'semeval'
-anchor_info = ('ccoha2_both', 'CCOHA 1960 - 2010')
-align_info = ('ccoha1_both', 'CCOHA 1810 - 1860')
+anchor_info  = ('ccoha2', 'CCOHA 1960 - 2010')
+align_info   = ('ccoha1_extra', 'CCOHA 1810 - 1860')
 
 #%%
 # Results from paper
@@ -42,7 +55,7 @@ auto_params = { "rate": 1.5,
                 "n_negatives": 100}
 
 align_methods = [
-    Train_Method_Info('global', None),
+    #Train_Method_Info('global', None)
     Train_Method_Info('s4', align_params)
 ]
 
@@ -52,9 +65,12 @@ classify_methods = [
 ]
 
 #%%
+vector_types = ['sense']
+
 main(dataset_name, targets,
      align_info, anchor_info,
+     vector_types,
      align_methods, classify_methods,
-     vector_types=['both_sense'],
      num_loops=10)
+
 # %%
