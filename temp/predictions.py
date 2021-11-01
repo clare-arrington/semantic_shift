@@ -28,31 +28,32 @@ def make_sense_prediction(predictions, threshold, align_model, anchor_model, wor
         shift_prediction = int(dist > threshold)
 
         word_count = align_model.wv.get_vecattr(sense_word, "count")
-        word_count += anchor_model.wv.get_vecattr(sense_word, "count")
+        if sense_word in anchor_model.wv:
+            word_count += anchor_model.wv.get_vecattr(sense_word, "count")
         
         target = sense_word.split('.')[0]
 
         info = (sense_word, dist, word_count, shift_prediction)
         prediction_info[target].append(info)
 
-    skipped_senses = [
-        'chairman.0', 'fiction.0', 'multitude.0',
-        'multitude.2', 'player.0', 'record.1', 'record.2'
-    ]
-    for sense_word in skipped_senses:
-        if sense_word in align_model.wv:
-            word_count = align_model.wv.get_vecattr(sense_word, "count")
-        elif sense_word in anchor_model.wv:
-            word_count = anchor_model.wv.get_vecattr(sense_word, "count")
-        else:
-            word_count = 19
+    # skipped_senses = [
+    #     'chairman.0', 'fiction.0', 'multitude.0',
+    #     'multitude.2', 'player.0', 'record.1', 'record.2'
+    # ]
+    # for sense_word in skipped_senses:
+    #     if sense_word in align_model.wv:
+    #         word_count = align_model.wv.get_vecattr(sense_word, "count")
+    #     elif sense_word in anchor_model.wv:
+    #         word_count = anchor_model.wv.get_vecattr(sense_word, "count")
+    #     else:
+    #         word_count = 19
 
-        dist = threshold * 1.01
-        shift_prediction = int(dist > threshold)
-        target = sense_word.split('.')[0]
+    #     dist = threshold * 1.01
+    #     shift_prediction = int(dist > threshold)
+    #     target = sense_word.split('.')[0]
 
-        info = (sense_word, dist, word_count, shift_prediction)
-        prediction_info[target].append(info)
+    #     info = (sense_word, dist, word_count, shift_prediction)
+    #     prediction_info[target].append(info)
 
 
     # TODO: this could be passed in if we only wanted to do a subset
