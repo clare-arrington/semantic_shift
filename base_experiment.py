@@ -33,10 +33,15 @@ def make_word_pairs(
     vocab: List[str], 
     targets: NamedTuple):
 
-    word_pairs = []
+    all_wp = []
+    target_wp = []
     if vector_type in ['original', 'new', 'both_sense']:
         for target in targets:
-            word_pairs.append((target.word, target.shifted_word))
+            all_wp.append((target.word, target.shifted_word))
+            
+            ## TODO: double check the logic of this
+            if target.is_shifted is not None:
+                target_wp.append((target.word, target.shifted_word))
 
     else:
         sense_words = [word for word in vocab if '.' in word]
@@ -44,10 +49,16 @@ def make_word_pairs(
 
         for target in targets:
             r = re.compile(f'{target.word}.[0-9]')
-            for sense in filter(r.match, sense_words):
-                word_pairs.append((sense, target.shifted_word))
+            sense_matches = filter(r.match, sense_words)
+            for sense in sense_matches:
+                all_wp.append((sense, target.shifted_word))
 
-    return word_pairs
+                if target.is_shifted is not None:
+                    target_wp.append((sense, target.shifted_word))
+
+    print(f'{len(all_wp)} total word pairs; {len(target_wp)} of those are targets')
+
+    return all_wp, target_wp
 
 ## TODO: this modifies long term; fix that issue up
 def remove_targets(
@@ -97,6 +108,7 @@ def remove_targets(
 
     return targets
 
+## TODO: set this so it can do SxA again
 def align_vectors(
     align_method: Train_Method_Info, 
     word_pairs: Tuple[str, str], 
@@ -124,7 +136,8 @@ def align_vectors(
         print(f"Check for any unwanted mutations: {len(wv1)}, {len(extended_wv1)}" )
 
         sense_landmarks = [extended_wv1.words[i] for i in landmarks if '.' in extended_wv1.words[i]]
-        print(f"Senses in landmarks: {', '.join(sense_landmarks)}")
+        # print(f"Senses in landmarks: {', '.join(sense_landmarks)}")
+        
         ## Just reset to make sure these weren't modified by S4
         # wv1, wv2 = intersection(align_wv.normal_vec, anchor_wv.normal_vec)
         # wv1, wv2 = extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs)
@@ -214,7 +227,7 @@ def predict_target_shift(
     ## Pull and prep vector data
     align_wv, anchor_wv = load_wordvectors(dataset_name, align_wv, anchor_wv)
     targets = remove_targets(targets, align_wv, anchor_wv)
-    word_pairs = make_word_pairs(align_wv.type, align_wv.normal_vec.words, targets)
+    all_word_pairs, target_word_pairs = make_word_pairs(align_wv.type, align_wv.normal_vec.words, targets)
 
     # TODO: could import this if I wanted to not overwrite a previous best
     best_accuracies = {clf_method.name : 0 for clf_method in classify_methods}
@@ -224,12 +237,12 @@ def predict_target_shift(
         print(f'{i+1} / {num_loops}')
 
         landmarks, align_wv, anchor_wv = align_vectors(
-                                            align_method, word_pairs, 
+                                            align_method, all_word_pairs, 
                                             align_wv, anchor_wv)
 
         dists, classify_methods = get_target_distances(
                                     classify_methods, 
-                                    word_pairs, landmarks, 
+                                    target_word_pairs, landmarks, 
                                     align_wv, anchor_wv)
 
         for method in classify_methods:
@@ -241,7 +254,7 @@ def predict_target_shift(
             elif 'sense' in align_wv.type:
                 prediction_info, shift_data, ratio_data = make_sense_prediction(
                     dists[method.name], method.threshold, 
-                    align_wv.model, anchor_wv.model, word_pairs)
+                    align_wv.model, anchor_wv.model, target_word_pairs)
 
                 accuracies, results = assess_sense_prediction(
                     shift_data, ratio_data, targets)
