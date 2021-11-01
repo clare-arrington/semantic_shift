@@ -1,8 +1,8 @@
  
 #%%
 from temp.predictions import make_sense_prediction, assess_sense_prediction, assess_standard_prediction
-from temp.shift import s4, threshold_crossvalidation
-from temp.wordvectors import VectorVariations, WordVectors, load_wordvectors, intersection, set_subtraction
+from temp.shift import s4_m3, threshold_crossvalidation
+from temp.wordvectors import VectorVariations, WordVectors, load_wordvectors, intersection, set_subtraction, extend_normal_with_sense
 from temp.printers import print_sense_output, print_shift_info
 from temp.alignment import align
 
@@ -49,6 +49,7 @@ def make_word_pairs(
 
     return word_pairs
 
+## TODO: this modifies long term; fix that issue up
 def remove_targets(
     targets: List[NamedTuple], 
     align_wv: VectorVariations, 
@@ -101,33 +102,46 @@ def align_vectors(
     word_pairs: Tuple[str, str], 
     align_wv: VectorVariations, 
     anchor_wv: VectorVariations, 
-    filter_targets=False):
-    
-    ## Make sure targets are removed from alignment and then intersect the two embeddings
-    if filter_targets:  
-        wv1 = set_subtraction(align_wv.normal_vec, [wp[0] for wp in word_pairs])
-    else:
-        wv1 = align_wv.normal_vec
+    modify_wv='all'):
 
-    wv1, wv2 = intersection(wv1, anchor_wv.normal_vec)
+    wv1, wv2 = intersection(align_wv.normal_vec, anchor_wv.normal_vec)
     print("Size of common vocab:", len(wv1))
 
     ## Get landmarks
     print(f'Starting {align_method.name} aligning')
     if align_method.name == 'global':
-        landmarks = wv1.words
+        landmarks = list(wv1.word_id.values())
+
     elif align_method.name == 's4':
-        landmarks, non_landmarks, Q = s4(
-            wv1, wv2, **align_method.params)
+        extended_wv1, extended_wv2 = extend_normal_with_sense(
+            wv1, wv2, align_wv, anchor_wv, word_pairs)
+        print(f"Size of WV after senses added: {len(wv1)} -> {len(extended_wv1)}" )
+
+        ## Align with subset of landmarks
+        landmarks, non_landmarks, Q = s4_m3(
+            wv1, wv2, extended_wv1, extended_wv2, **align_method.params)
         print('Done with S4 aligning')
+        print(f"Check for any unwanted mutations: {len(wv1)}, {len(extended_wv1)}" )
+
+        sense_landmarks = [extended_wv1.words[i] for i in landmarks if '.' in extended_wv1.words[i]]
+        print(f"Senses in landmarks: {', '.join(sense_landmarks)}")
+        ## Just reset to make sure these weren't modified by S4
+        # wv1, wv2 = intersection(align_wv.normal_vec, anchor_wv.normal_vec)
+        # wv1, wv2 = extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs)
+
+        wv1 = extended_wv1
+        wv2 = extended_wv2
 
     ## Align
     wv1_, wv2_, Q = align(wv1, wv2, anchor_words=landmarks)
+    print("Size of aligned vocab:", len(wv1_))
     align_wv.partial_align_vec = wv1_
     anchor_wv.partial_align_vec = wv2_
-
+    
     ## Align the original so that it matches wv1_ but has its full vocab
-    align_wv.post_align_vec = WordVectors(words=align_wv.normal_vec.words, vectors=np.dot(align_wv.normal_vec.vectors, Q))
+    align_wv.post_align_vec = WordVectors(
+        words=align_wv.normal_vec.words, 
+        vectors=np.dot(align_wv.normal_vec.vectors, Q))
     anchor_wv.post_align_vec = anchor_wv.normal_vec
 
     return landmarks, align_wv, anchor_wv
@@ -149,10 +163,10 @@ def get_target_distances(
         if method.name == 'cosine':
             print('Starting cosine predicting')
 
-            if method.threshold == 0:
-                method.threshold = threshold_crossvalidation(
-                    align_wv.partial_align_vec, anchor_wv.partial_align_vec, 
-                    **method.params, landmarks=landmarks)
+            #if method.threshold == 0:
+            method.threshold = threshold_crossvalidation(
+                align_wv.partial_align_vec, anchor_wv.partial_align_vec, 
+                **method.params, landmarks=landmarks)
 
             dists = []
             for align_word, anchor_word in word_pairs:
@@ -164,7 +178,7 @@ def get_target_distances(
 
         if method.name == 's4':
             print('Starting S4 predicting')
-            model = s4(align_wv.partial_align_vec, 
+            model = s4_m3(align_wv.partial_align_vec, 
                        align_wv.partial_align_vec, 
                        landmarks=landmarks, 
                        verbose=0, 
@@ -257,6 +271,7 @@ def predict_target_shift(
                 results.to_csv(f"{path_out}/labels.csv", index=False)
 
                 with open(f'{output_path}/{align_method.name}_landmarks.dat' , 'wb') as pf:
+                    landmarks = [align_wv.normal_vec.words[w] for w in landmarks]
                     pickle.dump(landmarks, pf)
 
     print('Tests complete!')
@@ -338,9 +353,9 @@ def main(
     targets: List[Target_Info],
     align_info: Tuple[str, str], 
     anchor_info: Tuple[str, str], 
-    align_methods=None, 
-    classify_methods=None, 
-    vector_types=['new', 'sense'],
+    vector_types: List[str],
+    align_methods: List[Train_Method_Info]=None, 
+    classify_methods: List[Train_Method_Info]=None, 
     num_loops: int = 1):
 
     for vector_type in vector_types:
@@ -388,3 +403,44 @@ def main(
             print(f'Results will be saved to {output_path}')
             with open(f'{output_path}/{save_file_name}.dat' , 'wb') as pf:
                 pickle.dump(all_accs, pf)
+
+
+#%%
+# Test stuff
+
+# def test_stuff():
+#     align_method = align_methods[0]
+#     classify_method = classify_methods[0]
+#     vector_type = 'sense'
+#     align_type = vector_type
+#     anchor_type = 'new'
+
+#     align_wv = VectorVariations(corpus_name = align_info[0],
+#                             desc = align_info[1], 
+#                             type = align_type)
+#     anchor_wv = VectorVariations(corpus_name = anchor_info[0],
+#                                 desc = anchor_info[1], 
+#                                 type = anchor_type)
+
+#     output_path = f'/home/clare/Data/align_results/{dataset_name}/align_{align_info[0]}/{vector_type}'
+#     print(output_path)
+    
+#     pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
+
+#     print('\n================================')
+#     print(f'Starting run for {align_method.name}, {align_wv.type}')
+
+#     ## Pull and prep vector data
+#     align_wv, anchor_wv = load_wordvectors(dataset_name, align_wv, anchor_wv)
+#     targets = remove_targets(targets, align_wv, anchor_wv)
+#     word_pairs = make_word_pairs(align_wv.type, align_wv.normal_vec.words, targets)
+
+#     ## Align Stuff
+#     wv1 = align_wv.normal_vec
+#     wv1, wv2 = intersection(wv1, anchor_wv.normal_vec)
+#     print("Size of common vocab:", len(wv1))
+
+#     # wv1, wv2 = extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs)
+#     # print("Size of extended vocab:", len(wv1))
+
+#     s4_m3(wv1, wv2)
