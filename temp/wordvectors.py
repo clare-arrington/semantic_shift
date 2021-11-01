@@ -32,6 +32,27 @@ def intersection(*args):
 
     return wv_out
 
+## TODO: change to add to VV
+def extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs):
+    wv1_words = wv1.words.copy()
+    wv1_vectors = list(wv1.vectors.copy())
+    wv2_words = wv2.words.copy()
+    wv2_vectors = list(wv2.vectors.copy())
+
+    for sense, target in word_pairs:
+        ## TODO: here for testing only one sense case
+        # if '0' in sense:
+        wv1_words.append(sense)
+        sense_vec = align_wv.normal_vec[sense]
+        wv1_vectors.append(sense_vec)
+
+        wv2_words.append(target)
+        target_vec = anchor_wv.normal_vec[target]
+        wv2_vectors.append(target_vec)
+
+    return WordVectors(words=wv1_words, vectors=wv1_vectors, centered=False), \
+           WordVectors(words=wv2_words, vectors=wv2_vectors, centered=False)
+
 def set_subtraction(wv, targets):
     words = [w for w in set(wv.words) if w not in targets]
     wv_out = WordVectors(words=words, vectors=[wv[w]for w in words])
@@ -212,9 +233,10 @@ class VectorVariations:
         self.corpus_name=corpus_name
         self.desc=desc
         self.type=type
+        self.model=None
 
         self.normal_vec=None
-        self.model=None
+        self.extended_vec=None
         self.partial_align_vec=None
         self.post_align_vec=None
 
