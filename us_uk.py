@@ -1,5 +1,5 @@
 #%%
-from base_experiment import main, Target_Info
+from base_experiment import main, Target_Info, Train_Method_Info
 import pickle
 
 def get_us_uk_targets(path, get_us=False, get_uk=False):
@@ -55,14 +55,39 @@ elif align_info[0] == 'coca':
 
 
 ## Paper results
-# s4 both
-# uk aligned to us anchor: .7
+# uk aligned to us anchor
+# s4 with cos: .44
+## Global: .38 / .45
+##     S4: .44 / .70
+
+#  BNC: 45813
+# COCA: 30415
 
 # best us_uk: 100, 100, .1
 align_params = {"n_targets": 100,
                 "n_negatives": 100,
                 "rate": .1
                 }
+
+classify_params = {"n_targets": 1000,
+                  "n_negatives": 1000,
+                  "rate": .25
+                  }
+
+auto_params = { "rate": 1.5,
+                "n_fold": 1,
+                "n_targets": 50,
+                "n_negatives": 100}
+
+align_methods = [
+    Train_Method_Info('global', None)
+    # Train_Method_Info('s4', align_params)
+]
+
+classify_methods = [
+    Train_Method_Info('cosine', auto_params, 0)
+    # Train_Method_Info('s4', classify_params, .5)
+]
 
 main(dataset_name, targets, num_loops, 
      align_info, anchor_info, align_params)
