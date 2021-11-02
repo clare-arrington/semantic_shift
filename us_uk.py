@@ -5,6 +5,7 @@ import pickle
 def get_us_uk_targets(path, get_us=False, get_uk=False):
     targets = []
     added_targets = set()
+    path = f'{path}/corpus_data/us_uk/truth'
 
     ## Get dissimilar
     num_dissimilar = 0
@@ -44,19 +45,16 @@ def get_us_uk_targets(path, get_us=False, get_uk=False):
 dataset_name = 'us_uk'
 anchor_info = ('coca', 'English corpus (COCA)')
 align_info = ('bnc', 'UK corpus (BNC)')
-num_loops = 10
-
-target_path = '/home/clare/Data/corpus_data/us_uk/truth'
+data_path = '/data/arrinj'
 
 if align_info[0] == 'bnc':
-    targets = get_us_uk_targets(f'{target_path}', get_uk=True)
+    targets = get_us_uk_targets(data_path, get_uk=True)
 elif align_info[0] == 'coca':
-    targets = get_us_uk_targets(f'{target_path}', get_us=True)
+    targets = get_us_uk_targets(data_path, get_us=True)
 
-
-## Paper results
-# uk aligned to us anchor
-# s4 with cos: .44
+#%%
+## Paper Results
+## UK aligned to US
 ## Global: .38 / .45
 ##     S4: .44 / .70
 
@@ -64,31 +62,39 @@ elif align_info[0] == 'coca':
 # COCA: 30415
 
 # best us_uk: 100, 100, .1
-align_params = {"n_targets": 100,
-                "n_negatives": 100,
-                "rate": .1
-                }
+s4_align_params = { "n_targets": 100,
+                    "n_negatives": 100,
+                    "rate": .1
+                    }
 
-classify_params = {"n_targets": 1000,
-                  "n_negatives": 1000,
-                  "rate": .25
-                  }
+s4_classify_params = {  "n_targets": 1000,
+                        "n_negatives": 1000,
+                        "rate": .25
+                        }
 
-auto_params = { "rate": 1.5,
-                "n_fold": 1,
-                "n_targets": 50,
-                "n_negatives": 100}
+cos_classify_params = { "n_targets": 50,
+                        "n_negatives": 100,
+                        "rate": 1.5,
+                        "n_fold": 1  }
 
 align_methods = [
     Train_Method_Info('global', None)
-    # Train_Method_Info('s4', align_params)
+    #Train_Method_Info('s4', s4_align_params)
 ]
 
 classify_methods = [
-    Train_Method_Info('cosine', auto_params, 0)
-    # Train_Method_Info('s4', classify_params, .5)
+    Train_Method_Info('cosine', cos_classify_params, 0),
+    Train_Method_Info('s4', s4_classify_params, .5)
 ]
 
-main(dataset_name, targets, num_loops, 
-     align_info, anchor_info, align_params)
+#%%
+vector_types = ['sense']
+
+main(
+    dataset_name, data_path,
+    targets,
+    align_info, anchor_info,
+    vector_types,
+    align_methods, classify_methods,
+    num_loops=3)
 # %%
