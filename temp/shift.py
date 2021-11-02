@@ -76,9 +76,9 @@ def inject_change_single(wv, target_vec, alt_vec,
 
     dist_threshold = cosine(target_vec, alt_vec)
 
-    cos_dist = 0
+    cos_dist = dist_threshold 
     tries = 0
-    while cos_dist < dist_threshold and tries < max_tries:
+    while cos_dist <= dist_threshold and tries < max_tries:
         tries += 1
         word = np.random.choice(wv.words)  
         new_vec = alt_vec + (rate * wv[word])
@@ -251,7 +251,7 @@ def get_initial_landmarks(wv1, wv2):
 
     return landmark_args[:cutoff]
 
-def s4_m3(wv1, wv2, extended_wv1=None, extended_wv2=None,
+def s4(wv1, wv2, extended_wv1=None, extended_wv2=None,
           verbose=False, plot=False, 
                             iters=100,
                             n_targets=10,

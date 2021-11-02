@@ -35,33 +35,32 @@ align_info   = ('ccoha1_extra', 'CCOHA 1810 - 1860')
 #%%
 # Results from paper
 # .7 for english
-# align old to new
+# align old (ccoha1) to new (ccoha2)
 
-## This is only align for S4, not cosine
-align_params = {"n_targets": 100,
+s4_align_params = {"n_targets": 100,
                 "n_negatives": 50,
                 "rate": 1,
                 "iters": 100
                 }
 
-classify_params = {"n_targets": 500,
+s4_classify_params = {"n_targets": 500,
                   "n_negatives": 750,
                   "rate": .25
                   }
 
-auto_params = { "rate": 1.5,
+cos_classify_params = { "rate": 1.5,
                 "n_fold": 1,
                 "n_targets": 50,
                 "n_negatives": 100}
 
 align_methods = [
     #Train_Method_Info('global', None)
-    Train_Method_Info('s4', align_params)
+    Train_Method_Info('s4', s4_align_params)
 ]
 
 classify_methods = [
-    Train_Method_Info('cosine', auto_params, 0)
-    # Train_Method_Info('s4', classify_params, .5)
+    Train_Method_Info('cosine', cos_classify_params, 0)
+    # Train_Method_Info('s4', s4_classify_params, .5)
 ]
 
 #%%

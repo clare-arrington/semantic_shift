@@ -101,17 +101,19 @@ def make_sense_prediction(predictions, threshold, align_model, anchor_model, wor
 
 def assess_sense_prediction(shift_data, ratio_data, targets: List[NamedTuple]):
     
-    # target_words, _, true_labels = list(zip(*targets))   
-    with open('/home/clare/Data/corpus_data/semeval/truth/binary.txt') as fin:
-        og_targets = fin.read().strip().split('\n')
-        true_labels = []
-        target_words = []
-        for target in sorted(og_targets):
-            target, label = target.split('\t')
-            label = bool(int(label))
-            word, pos = target.split('_')
-            true_labels.append(label)
-            target_words.append(word)
+    target_words, _, true_labels = list(zip(*targets)) 
+    
+    ## TODO: why did I have this instead function?  
+    # with open('/home/clare/Data/corpus_data/semeval/truth/binary.txt') as fin:
+    #     og_targets = fin.read().strip().split('\n')
+    #     true_labels = []
+    #     target_words = []
+    #     for target in sorted(og_targets):
+    #         target, label = target.split('\t')
+    #         label = bool(int(label))
+    #         word, pos = target.split('_')
+    #         true_labels.append(label)
+    #         target_words.append(word)
 
     accuracies = {}
     for method, shift_pred in shift_data.items():
