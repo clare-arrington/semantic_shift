@@ -32,7 +32,7 @@ def intersection(*args):
 
     return wv_out
 
-## TODO: change to add to VV
+## TODO: add to VecVar
 def extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs):
     wv1_words = wv1.words.copy()
     wv1_vectors = list(wv1.vectors.copy())
@@ -40,8 +40,11 @@ def extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs):
     wv2_vectors = list(wv2.vectors.copy())
 
     for sense, target in word_pairs:
-        ## TODO: here for testing only one sense case
-        # if '0' in sense:
+        if sense == target and sense in wv1_words:
+            continue
+
+        print(f'Adding {sense} : {target}')
+
         wv1_words.append(sense)
         sense_vec = align_wv.normal_vec[sense]
         wv1_vectors.append(sense_vec)
@@ -226,7 +229,6 @@ class WordVectors:
                 v_string = " ".join(map(str, vec))
                 fout.write("%s %s\n" % (word, v_string))
 
-## TODO: maybe think on names more
 ## Contains the descriptive information and all the variants of the same wordvector
 class VectorVariations:
     def __init__(self, corpus_name, desc, type=None):
@@ -240,31 +242,38 @@ class VectorVariations:
         self.partial_align_vec=None
         self.post_align_vec=None
 
-def reformat_loaded_wordvector(vector, dataset_name):
-    vector.model = Word2Vec.load(f'/home/clare/Data/word_vectors/{dataset_name}/{vector.type}/{vector.corpus_name}.vec')
+def reformat_loaded_wordvector(vector, vector_path):
+    vector.model = Word2Vec.load(
+        f'{vector_path}/{vector.type}/{vector.corpus_name}.vec')
     vocab = list(vector.model.wv.index_to_key)
     vectors = vector.model.wv.vectors
     vector.normal_vec = WordVectors(words=vocab, vectors=vectors)
 
     return vector
 
-# TODO: would I like to pass in filenames instead?
-# wv1 is the one that will be aligned to wv2
-def load_wordvectors(dataset_name: str, 
-    align_vector: VectorVariations, anchor_vector: VectorVariations):
+# wv1 is the wv that will be aligned to wv2
+def load_wordvectors(
+    align_vector: VectorVariations, 
+    anchor_vector: VectorVariations,
+    vector_path: str
+    ):
 
     ## Original is in WordVector format already
     if align_vector.type == 'original':
         align_name = align_vector.corpus_name
-        align_vector.normal_vec = WordVectors(input_file=f"/home/clare/Data/word_vectors/{dataset_name}/original/{align_name}.vec")
+        align_vector.normal_vec = WordVectors(
+            input_file=f"{vector_path}/original/{align_name}.vec")
         
         anchor_name = anchor_vector.corpus_name
-        anchor_vector.normal_vec = WordVectors(input_file=f"/home/clare/Data/word_vectors/{dataset_name}/original/{anchor_name}.vec")
+        anchor_vector.normal_vec = WordVectors(
+            input_file=f"{vector_path}/original/{anchor_name}.vec")
         
     ## Newly trained models are in Word2Vec format and must be reformatted
     else:
-        align_vector = reformat_loaded_wordvector(align_vector, dataset_name)
-        anchor_vector = reformat_loaded_wordvector(anchor_vector, dataset_name)
+        align_vector = reformat_loaded_wordvector(
+            align_vector, vector_path)
+        anchor_vector = reformat_loaded_wordvector(
+            anchor_vector, vector_path)
     
     return align_vector, anchor_vector
 

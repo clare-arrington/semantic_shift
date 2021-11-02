@@ -1,14 +1,14 @@
  
 #%%
 from temp.predictions import make_sense_prediction, assess_sense_prediction, assess_standard_prediction
-from temp.shift import s4_m3, threshold_crossvalidation
+from temp.shift import s4, threshold_crossvalidation
 from temp.wordvectors import VectorVariations, WordVectors, load_wordvectors, intersection, set_subtraction, extend_normal_with_sense
 from temp.printers import print_sense_output, print_shift_info
 from temp.alignment import align
 
 from scipy.spatial.distance import cosine
 
-from typing import Tuple, NamedTuple, List, Dict
+from typing import Tuple, NamedTuple, List
 from collections import namedtuple
 import pathlib
 import pickle
@@ -60,7 +60,7 @@ def make_word_pairs(
 
     return all_wp, target_wp
 
-## TODO: this modifies long term; fix that issue up
+## TODO: this modifies targets long term; fix that issue up
 def remove_targets(
     targets: List[NamedTuple], 
     align_wv: VectorVariations, 
@@ -108,13 +108,12 @@ def remove_targets(
 
     return targets
 
-## TODO: set this so it can do SxA again
 def align_vectors(
     align_method: Train_Method_Info, 
     word_pairs: Tuple[str, str], 
     align_wv: VectorVariations, 
     anchor_wv: VectorVariations, 
-    modify_wv='all'):
+    add_senses_in_alignment=True):
 
     wv1, wv2 = intersection(align_wv.normal_vec, anchor_wv.normal_vec)
     print("Size of common vocab:", len(wv1))
@@ -125,27 +124,33 @@ def align_vectors(
         landmarks = list(wv1.word_id.values())
 
     elif align_method.name == 's4':
-        extended_wv1, extended_wv2 = extend_normal_with_sense(
-            wv1, wv2, align_wv, anchor_wv, word_pairs)
-        print(f"Size of WV after senses added: {len(wv1)} -> {len(extended_wv1)}" )
+        if add_senses_in_alignment:
+            extended_wv1, extended_wv2 = extend_normal_with_sense(
+                wv1, wv2, align_wv, anchor_wv, word_pairs)
+            print(f"Size of WV after senses added: {len(wv1)} -> {len(extended_wv1)}" )
 
-        ## Align with subset of landmarks
-        landmarks, non_landmarks, Q = s4_m3(
-            wv1, wv2, extended_wv1, extended_wv2, **align_method.params)
-        print('Done with S4 aligning')
-        print(f"Check for any unwanted mutations: {len(wv1)}, {len(extended_wv1)}" )
+            ## Align with subset of landmarks
+            landmarks, _, Q = s4(
+                wv1, wv2, extended_wv1, extended_wv2, **align_method.params)
+            print('Done with S4 aligning')
+            print(f"Check for any unwanted mutations: {len(wv1)}, {len(extended_wv1)}" )
 
-        sense_landmarks = [extended_wv1.words[i] for i in landmarks if '.' in extended_wv1.words[i]]
-        # print(f"Senses in landmarks: {', '.join(sense_landmarks)}")
+            print(landmarks[:3])
+
+            # sense_landmarks = [extended_wv1.words[i] for i in landmarks if '.' in extended_wv1.words[i]]
+            # print(f"Senses in landmarks: {', '.join(sense_landmarks)}")
         
-        ## Just reset to make sure these weren't modified by S4
-        # wv1, wv2 = intersection(align_wv.normal_vec, anchor_wv.normal_vec)
-        # wv1, wv2 = extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs)
-
-        wv1 = extended_wv1
-        wv2 = extended_wv2
+            wv1 = extended_wv1
+            wv2 = extended_wv2
+        else:
+            ## Align with subset of landmarks
+            landmarks, _, Q = s4(
+                wv1, wv2, **align_method.params)
+            print('Done with S4 aligning')
+            print(f"Check for any unwanted mutations: {len(wv1)}" )
 
     ## Align
+    print(f'{len(landmarks)} landmarks selected')
     wv1_, wv2_, Q = align(wv1, wv2, anchor_words=landmarks)
     print("Size of aligned vocab:", len(wv1_))
     align_wv.partial_align_vec = wv1_
@@ -172,7 +177,6 @@ def get_target_distances(
     target_dists = {}
 
     for method in classify_methods:
-
         if method.name == 'cosine':
             print('Starting cosine predicting')
 
@@ -191,10 +195,9 @@ def get_target_distances(
 
         if method.name == 's4':
             print('Starting S4 predicting')
-            model = s4_m3(align_wv.partial_align_vec, 
+            model = s4(align_wv.partial_align_vec, 
                        align_wv.partial_align_vec, 
                        landmarks=landmarks, 
-                       verbose=0, 
                        **method.params, 
                        update_landmarks=False)
 
@@ -217,15 +220,18 @@ def get_target_distances(
 def predict_target_shift(
         align_method: Train_Method_Info, 
         classify_methods: List[Train_Method_Info],  
-        dataset_name: str, targets: List[NamedTuple],
+        dataset_name: str, 
+        targets: List[NamedTuple],
         align_wv: VectorVariations, anchor_wv: VectorVariations,
-        output_path: str, num_loops):
+        output_path: str, data_path: str, 
+        num_loops: int):
 
     print('\n================================')
     print(f'Starting run for {align_method.name}, {align_wv.type}')
 
     ## Pull and prep vector data
-    align_wv, anchor_wv = load_wordvectors(dataset_name, align_wv, anchor_wv)
+    align_wv, anchor_wv = load_wordvectors(align_wv, anchor_wv,
+        f'{data_path}/word_vectors/{dataset_name}')
     targets = remove_targets(targets, align_wv, anchor_wv)
     all_word_pairs, target_word_pairs = make_word_pairs(align_wv.type, align_wv.normal_vec.words, targets)
 
@@ -284,8 +290,8 @@ def predict_target_shift(
                 results.to_csv(f"{path_out}/labels.csv", index=False)
 
                 with open(f'{output_path}/{align_method.name}_landmarks.dat' , 'wb') as pf:
-                    landmarks = [align_wv.normal_vec.words[w] for w in landmarks]
-                    pickle.dump(landmarks, pf)
+                    landmark_terms = [align_wv.partial_align_vec.words[w] for w in landmarks]
+                    pickle.dump(landmark_terms, pf)
 
     print('Tests complete!')
     for classify_method, accuracy in best_accuracies.items():
@@ -363,6 +369,7 @@ def classify_param_sweep(
 ## align_info should be (name, desc)
 def main(
     dataset_name:str, 
+    data_path: str,
     targets: List[Target_Info],
     align_info: Tuple[str, str], 
     anchor_info: Tuple[str, str], 
@@ -388,7 +395,7 @@ def main(
                                         desc = anchor_info[1], 
                                         type = anchor_type)
 
-            output_path = f'/home/clare/Data/align_results/{dataset_name}/align_{align_info[0]}/{vector_type}'
+            output_path = f'{data_path}/align_results/{dataset_name}/align_{align_info[0]}/{vector_type}'
             pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
 
             # if (align_params is None) and (align_method == 's4'):
@@ -410,7 +417,7 @@ def main(
                             align_method, classify_methods,
                             dataset_name, targets,
                             align_wv, anchor_wv, 
-                            output_path, num_loops)
+                            output_path, data_path, num_loops)
             save_file_name = align_method.name
             
             print(f'Results will be saved to {output_path}')
@@ -456,4 +463,4 @@ def main(
 #     # wv1, wv2 = extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs)
 #     # print("Size of extended vocab:", len(wv1))
 
-#     s4_m3(wv1, wv2)
+#     s4(wv1, wv2)
