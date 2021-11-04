@@ -43,7 +43,7 @@ def extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs):
         if sense == target and sense in wv1_words:
             continue
 
-        print(f'Adding {sense} : {target}')
+        # print(f'Adding {sense} : {target}')
 
         wv1_words.append(sense)
         sense_vec = align_wv.normal_vec[sense]
