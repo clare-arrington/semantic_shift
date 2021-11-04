@@ -155,6 +155,8 @@ def align_vectors(
     print("Size of aligned vocab:", len(wv1_))
     align_wv.partial_align_vec = wv1_
     anchor_wv.partial_align_vec = wv2_
+
+    landmark_terms = [wv1_.words[w] for w in landmarks]
     
     ## Align the original so that it matches wv1_ but has its full vocab
     align_wv.post_align_vec = WordVectors(
@@ -162,12 +164,12 @@ def align_vectors(
         vectors=np.dot(align_wv.normal_vec.vectors, Q))
     anchor_wv.post_align_vec = anchor_wv.normal_vec
 
-    return landmarks, align_wv, anchor_wv
+    return landmarks, landmark_terms, align_wv, anchor_wv
 
 def get_target_distances(
         classify_methods: List[Train_Method_Info],
         word_pairs: Tuple[str, str], 
-        landmarks,
+        landmarks: List[int],
         align_wv: VectorVariations, 
         anchor_wv: VectorVariations    
         ):
@@ -193,10 +195,11 @@ def get_target_distances(
 
             target_dists['cosine'] = np.array(dists) 
 
+        ## TODO: I think partial_align_vec is modified here
         if method.name == 's4':
             print('Starting S4 predicting')
             model = s4(align_wv.partial_align_vec, 
-                       align_wv.partial_align_vec, 
+                       anchor_wv.partial_align_vec, 
                        landmarks=landmarks, 
                        **method.params, 
                        update_landmarks=False)
@@ -242,7 +245,7 @@ def predict_target_shift(
     for i in range(num_loops):
         print(f'{i+1} / {num_loops}')
 
-        landmarks, align_wv, anchor_wv = align_vectors(
+        landmarks, landmark_terms, align_wv, anchor_wv = align_vectors(
                                             align_method, all_word_pairs, 
                                             align_wv, anchor_wv)
 
@@ -289,8 +292,8 @@ def predict_target_shift(
                     
                 results.to_csv(f"{path_out}/labels.csv", index=False)
 
-                with open(f'{output_path}/{align_method.name}_landmarks.dat' , 'wb') as pf:
-                    landmark_terms = [align_wv.partial_align_vec.words[w] for w in landmarks]
+                ## TODO: save in JSON or plaintext?
+                with open(f'{path_out}/landmarks.pkl' , 'wb') as pf:
                     pickle.dump(landmark_terms, pf)
 
     print('Tests complete!')
@@ -420,8 +423,9 @@ def main(
                             output_path, data_path, num_loops)
             save_file_name = align_method.name
             
+            ## TODO: save in JSON instead
             print(f'Results will be saved to {output_path}')
-            with open(f'{output_path}/{save_file_name}.dat' , 'wb') as pf:
+            with open(f'{output_path}/{save_file_name}_run_results.pkl' , 'wb') as pf:
                 pickle.dump(all_accs, pf)
 
 
