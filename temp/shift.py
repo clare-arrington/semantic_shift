@@ -241,12 +241,12 @@ def threshold_crossvalidation(wv1, wv2, iters=100,
 
 #%%
 def get_initial_landmarks(wv1, wv2):
-    wv1, wv2, Q = align(wv1, wv2)  # start form global alignment
+    wv1_, wv2_, Q = align(wv1, wv2)  # start from intersected alignment
     
-    landmark_dists = [euclidean(u, v) for u, v in zip(wv1.vectors, wv2.vectors)]
-    
+    landmark_dists = [euclidean(u, v) for u, v in zip(
+        wv1_.vectors, wv2_.vectors)]
     landmark_args = np.argsort(landmark_dists)
-    cutoff = int(len(wv1.words) * 0.5)
+    cutoff = int(len(wv1_.words) * 0.5)
     # landmarks = [wv1.words[i] for i in landmark_args[:cutoff]]
 
     return landmark_args[:cutoff]
@@ -284,7 +284,7 @@ def s4(wv1, wv2, extended_wv1=None, extended_wv2=None,
             return None
 
     # Begin alignment
-    if update_landmarks:
+    if landmarks is None:
         landmarks = get_initial_landmarks(wv1, wv2)
      
     ## TODO: might have to add a word to ID conversion if they pass in landmarks
