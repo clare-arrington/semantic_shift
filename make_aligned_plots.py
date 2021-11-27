@@ -5,6 +5,7 @@ from temp.wordvectors import WordVectors, VectorVariations, load_wordvectors, in
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 from collections import defaultdict
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import pickle
@@ -89,25 +90,30 @@ def make_plot(x, words, categories,
 
 def plot_alignment( id, main_wv, other_wv, 
                     wv_names, path, 
-                    flip=False, count=1):
+                    flip=False):
 
-    vecs, words = [], []
     categories = [f'Target from {wv_names[0]}']
-    
+    target = main_wv.words[id]
+    words = [target]
+    vecs = [main_wv[id]]
+
     _, indices = perform_mapping(main_wv, main_wv, 
-                                n_neighbors=10+count) 
-    neighbors = indices[id][count-1:]
-    vecs += [main_wv[i] for i in neighbors]
-    words += [main_wv.words[i] for i in neighbors]
-    categories += [wv_names[0]] * (len(neighbors) - 1)
-    # importance += ['non_target'] * len(neighbors) - 1
+                                n_neighbors=20) 
+    neighbors = indices[id]
+    for i in neighbors:
+        word = main_wv.words[i]
+        if word != target:
+            vecs.append(main_wv[i])
+            words.append(word)
+        if len(words) == 11:
+            break
+    categories += [wv_names[0]] * 10
 
     _, indices = perform_mapping(main_wv, other_wv)
     neighbors = indices[id]
     vecs += [other_wv[i] for i in neighbors]
     words += [other_wv.words[i] for i in neighbors]
     categories += [wv_names[1]] * len(neighbors)
-    # importance += ['non_target'] * len(neighbors) 
 
     x = get_neighbor_coordinates(vecs)
     make_plot(x, words, categories, wv_names, path, flip)
@@ -125,7 +131,7 @@ def prep_vectors(align_wv, anchor_wv, data_path, targets):
         wv1, wv2, align_wv, anchor_wv, all_word_pairs)
     print(f"Size of WV after senses added: {len(wv1)} -> {len(extended_wv1)}" )
 
-    output_path = f'{data_path}/align_results/semeval/align_ccoha1/sense/s4_cosine/'
+    output_path = f'{data_path}/align_results/{dataset_name}/align_{align_wv.corpus_name}/sense/s4_cosine'
     with open(f'{output_path}/landmarks.pkl' , 'rb') as pf:
         landmark_terms = pickle.load(pf)
         print(len(landmark_terms))
@@ -177,7 +183,7 @@ with open(f'{data_path}/corpus_data/semeval/truth/binary.txt') as fin:
         target = Target_Info(word=word, shifted_word=target, is_shifted=label)
         targets.append(target)
 
-align_wv = VectorVariations(corpus_name = 'ccoha1',
+align_wv = VectorVariations(corpus_name = 'ccoha1_0',
                         desc = '1810 - 1860', 
                         type = 'sense')
 anchor_wv = VectorVariations(corpus_name = 'ccoha2',
@@ -187,25 +193,28 @@ target_word_pairs = prep_vectors(align_wv, anchor_wv, data_path, targets)
 
 #%%
 ## TODO: would be ideal to have this be more than just the intersection
-wv1 = align_wv.partial_align_vec
-wv2 = anchor_wv.partial_align_vec
-wv_names_1800s = [align_wv.desc, anchor_wv.desc]
-wv_names_2000s = [anchor_wv.desc, align_wv.desc]
-path = f'{data_path}/plots/align_neighbors'
+# wv1 = align_wv.partial_align_vec
+# wv2 = anchor_wv.partial_align_vec
+wv1 = align_wv.post_align_vec
+wv2 = anchor_wv.post_align_vec
+sense_wv_names = [align_wv.desc, anchor_wv.desc]
+target_wv_names = [anchor_wv.desc, align_wv.desc]
 
-num_senses = defaultdict(int)
+path = f'{data_path}/plots/align_all_{align_wv.corpus_name}'
+Path(path).mkdir(parents=True, exist_ok=True)
+
+targets = set()
 for sense, target in target_word_pairs:
+    targets.add(target)
     id = wv1.word_id[sense]
-    # plot_alignment(id, wv1, wv2, wv_names_1800s, 
-    #     f'{path}/{sense}.html')
-
-    num_senses[target] += 1
+    plot_alignment(id, wv1, wv2, sense_wv_names, 
+        f'{path}/{sense}.html')
 
 #%%
-for target, count in num_senses.items():
+for target in list(targets):
     id = wv2.word_id[target]
-    plot_alignment(id, wv2, wv1, wv_names_2000s, 
-        f'{path}/{target}.html', flip=True, count=count)
+    plot_alignment(id, wv2, wv1, target_wv_names, 
+        f'{path}/{target}.html', flip=True)
     
 #%%
 ## Sense, its local neighbors, and aligned neighbors
