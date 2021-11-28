@@ -242,9 +242,9 @@ class VectorVariations:
         self.partial_align_vec=None
         self.post_align_vec=None
 
-def reformat_loaded_wordvector(vector, vector_path):
+def reformat_loaded_wordvector(vector, vector_path, slice_path):
     vector.model = Word2Vec.load(
-        f'{vector_path}/{vector.type}/{vector.corpus_name}.vec')
+        f'{vector_path}/{vector.type}/{vector.corpus_name}{slice_path}.vec')
     vocab = list(vector.model.wv.index_to_key)
     vectors = vector.model.wv.vectors
     vector.normal_vec = WordVectors(words=vocab, vectors=vectors)
@@ -255,6 +255,7 @@ def reformat_loaded_wordvector(vector, vector_path):
 def load_wordvectors(
     align_vector: VectorVariations, 
     anchor_vector: VectorVariations,
+    slice_path: str,
     vector_path: str
     ):
 
@@ -271,9 +272,9 @@ def load_wordvectors(
     ## Newly trained models are in Word2Vec format and must be reformatted
     else:
         align_vector = reformat_loaded_wordvector(
-            align_vector, vector_path)
+            align_vector, vector_path, slice_path)
         anchor_vector = reformat_loaded_wordvector(
-            anchor_vector, vector_path)
+            anchor_vector, vector_path, slice_path)
     
     return align_vector, anchor_vector
 
