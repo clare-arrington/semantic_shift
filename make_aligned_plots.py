@@ -1,11 +1,12 @@
 #%%
-from base_experiment import make_word_pairs, Target_Info
+from base_experiment import filter_targets, make_word_pairs, Target_Info
 from temp.alignment import align
 from temp.wordvectors import WordVectors, VectorVariations, load_wordvectors, intersection, extend_normal_with_sense
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 from collections import defaultdict
 from pathlib import Path
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import pickle
@@ -96,7 +97,7 @@ def plot_alignment( id, main_wv, other_wv,
     target = main_wv.words[id]
     words = [target]
     vecs = [main_wv[id]]
-
+    
     _, indices = perform_mapping(main_wv, main_wv, 
                                 n_neighbors=20) 
     neighbors = indices[id]
@@ -105,9 +106,9 @@ def plot_alignment( id, main_wv, other_wv,
         if word != target:
             vecs.append(main_wv[i])
             words.append(word)
+            categories.append(wv_names[0])
         if len(words) == 11:
             break
-    categories += [wv_names[0]] * 10
 
     _, indices = perform_mapping(main_wv, other_wv)
     neighbors = indices[id]
@@ -118,9 +119,19 @@ def plot_alignment( id, main_wv, other_wv,
     x = get_neighbor_coordinates(vecs)
     make_plot(x, words, categories, wv_names, path, flip)
 
-def prep_vectors(align_wv, anchor_wv, data_path, targets):
-    align_wv, anchor_wv = load_wordvectors(align_wv, anchor_wv,
+def prep_vectors(
+    align_wv, anchor_wv, dataset_name, 
+    data_path, slice_path, targets,
+    norm=False):
+
+    align_wv, anchor_wv = load_wordvectors(align_wv, anchor_wv, slice_path,
         f'{data_path}/word_vectors/{dataset_name}')
+
+    if norm:
+        align_wv.normal_vec.normalize()
+        anchor_wv.normal_vec.normalize()
+
+    targets = filter_targets(targets, align_wv, anchor_wv)
     all_word_pairs, target_word_pairs = make_word_pairs(
         align_wv.type, align_wv.normal_vec.words, targets)
 
@@ -131,12 +142,14 @@ def prep_vectors(align_wv, anchor_wv, data_path, targets):
         wv1, wv2, align_wv, anchor_wv, all_word_pairs)
     print(f"Size of WV after senses added: {len(wv1)} -> {len(extended_wv1)}" )
 
-    output_path = f'{data_path}/align_results/{dataset_name}/align_{align_wv.corpus_name}/sense/s4_cosine'
+    output_path = f'{data_path}/align_results/{dataset_name}/align_{align_wv.corpus_name}/sense{slice_path}/s4_cosine'
     with open(f'{output_path}/landmarks.pkl' , 'rb') as pf:
         landmark_terms = pickle.load(pf)
         print(len(landmark_terms))
 
-    landmarks = [extended_wv1.word_id[word] for word in landmark_terms]
+    ## TODO: same problem still with landmarks not all being there at times
+    ## Is extended the problem?
+    landmarks = [extended_wv1.word_id[word] for word in landmark_terms if word in extended_wv1.word_id]
     # sense_landmarks = [lm for lm in landmark_terms if '.' in lm]
 
     ## Align with subset of landmarks
@@ -170,6 +183,7 @@ def get_neighbor_coordinates(x):
     return list(PCA(n_components=2).fit_transform(x))
 
 #%%
+## TODO: this also needs unique files
 data_path = '/home/clare/Data'
 dataset_name = 'semeval'
 targets = []
@@ -179,7 +193,6 @@ with open(f'{data_path}/corpus_data/semeval/truth/binary.txt') as fin:
         target, label = target.split('\t')
         label = bool(int(label))
         word, pos = target.split('_')
-
         target = Target_Info(word=word, shifted_word=target, is_shifted=label)
         targets.append(target)
 
@@ -189,33 +202,60 @@ align_wv = VectorVariations(corpus_name = 'ccoha1_0',
 anchor_wv = VectorVariations(corpus_name = 'ccoha2',
                             desc = '1960 - 2010', 
                             type = 'new')
-target_word_pairs = prep_vectors(align_wv, anchor_wv, data_path, targets) 
 
-#%%
-## TODO: would be ideal to have this be more than just the intersection
-# wv1 = align_wv.partial_align_vec
-# wv2 = anchor_wv.partial_align_vec
-wv1 = align_wv.post_align_vec
-wv2 = anchor_wv.post_align_vec
-sense_wv_names = [align_wv.desc, anchor_wv.desc]
-target_wv_names = [anchor_wv.desc, align_wv.desc]
+for slice_num in range(0, 6):
+    data_path = '/data/arrinj'
+    dataset_name = 'news'
+    targets = []
+    with open(f'{data_path}/corpus_data/{dataset_name}/targets.txt') as fin:
+        og_targets = fin.read().strip().split('\n')
+        for target in og_targets:
+            target = Target_Info(word=target, shifted_word=target, is_shifted=True)
+            targets.append(target)
 
-path = f'{data_path}/plots/align_all_{align_wv.corpus_name}'
-Path(path).mkdir(parents=True, exist_ok=True)
+    ## Swap
+    anchor_wv = VectorVariations(corpus_name = 'mainstream',
+                            desc = 'Mainstream news corpus', 
+                            type = 'new')
+    align_wv = VectorVariations(corpus_name = 'alternative',
+                                desc = 'Pseudoscience health corpus', 
+                                type = 'sense')
 
-targets = set()
-for sense, target in target_word_pairs:
-    targets.add(target)
-    id = wv1.word_id[sense]
-    plot_alignment(id, wv1, wv2, sense_wv_names, 
-        f'{path}/{sense}.html')
+    if slice_num is not None:
+        slice_path = f'/slice_{slice_num}'
+    else:
+        slice_path = ''
 
-#%%
-for target in list(targets):
-    id = wv2.word_id[target]
-    plot_alignment(id, wv2, wv1, target_wv_names, 
-        f'{path}/{target}.html', flip=True)
+    target_word_pairs = prep_vectors(
+        align_wv, anchor_wv, dataset_name, 
+        data_path, slice_path, targets, norm=True) 
+
+    ## TODO: would be ideal to have this be more than just the intersection
+    # wv1 = align_wv.partial_align_vec
+    # wv2 = anchor_wv.partial_align_vec
+    wv1 = align_wv.post_align_vec
+    wv2 = anchor_wv.post_align_vec
+    sense_wv_names = [align_wv.desc, anchor_wv.desc]
+    target_wv_names = [anchor_wv.desc, align_wv.desc]
+
+    path = f'{data_path}/plots/align_{align_wv.corpus_name}{slice_path}'
+    Path(path).mkdir(parents=True, exist_ok=True)
+
+    targets = set()
+    for sense, target in tqdm(target_word_pairs):
+        targets.add(target)
+        id = wv1.word_id[sense]
+        plot_alignment(id, wv1, wv2, sense_wv_names, 
+            f'{path}/{sense}.html')
+
+    for target in tqdm(list(targets)):
+        id = wv2.word_id[target]
+        plot_alignment(id, wv2, wv1, target_wv_names, 
+            f'{path}/{target}.html', flip=True)
     
+    print(slice_num, ' Done')
+    break
+
 #%%
 ## Sense, its local neighbors, and aligned neighbors
 ## Target, its local neighbors, and aligned neighbors
