@@ -4,14 +4,12 @@ from temp.alignment import align
 from temp.wordvectors import WordVectors, VectorVariations, load_wordvectors, intersection, extend_normal_with_sense
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
-from collections import defaultdict
 from pathlib import Path
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import pickle
 import plotly.express as px
-import os
 
 # os.chdir('..')
 def make_plot(x, words, categories, 
@@ -128,8 +126,10 @@ def prep_vectors(
         f'{data_path}/word_vectors/{dataset_name}')
 
     if norm:
+        ## TODO: this does work
         align_wv.normal_vec.normalize()
         anchor_wv.normal_vec.normalize()
+        # vec_len = np.linalg.norm(model.wv[word])
 
     targets = filter_targets(targets, align_wv, anchor_wv)
     all_word_pairs, target_word_pairs = make_word_pairs(
@@ -182,26 +182,27 @@ def get_neighbor_coordinates(x):
     """
     return list(PCA(n_components=2).fit_transform(x))
 
-#%%
-## TODO: this also needs unique files
-data_path = '/home/clare/Data'
-dataset_name = 'semeval'
-targets = []
-with open(f'{data_path}/corpus_data/semeval/truth/binary.txt') as fin:
-    og_targets = fin.read().strip().split('\n')
-    for target in og_targets:
-        target, label = target.split('\t')
-        label = bool(int(label))
-        word, pos = target.split('_')
-        target = Target_Info(word=word, shifted_word=target, is_shifted=label)
-        targets.append(target)
+def run_semeval():
+    data_path = '/home/clare/Data'
+    dataset_name = 'semeval'
+    targets = []
+    with open(f'{data_path}/corpus_data/semeval/truth/binary.txt') as fin:
+        og_targets = fin.read().strip().split('\n')
+        for target in og_targets:
+            target, label = target.split('\t')
+            label = bool(int(label))
+            word, pos = target.split('_')
+            target = Target_Info(word=word, shifted_word=target, is_shifted=label)
+            targets.append(target)
 
-align_wv = VectorVariations(corpus_name = 'ccoha1_0',
-                        desc = '1810 - 1860', 
-                        type = 'sense')
-anchor_wv = VectorVariations(corpus_name = 'ccoha2',
-                            desc = '1960 - 2010', 
-                            type = 'new')
+    align_wv = VectorVariations(corpus_name = 'ccoha1_0',
+                            desc = '1810 - 1860', 
+                            type = 'sense')
+    anchor_wv = VectorVariations(corpus_name = 'ccoha2',
+                                desc = '1960 - 2010', 
+                                type = 'new')
+
+#%%
 
 for slice_num in range(0, 6):
     data_path = '/data/arrinj'
@@ -243,6 +244,8 @@ for slice_num in range(0, 6):
 
     targets = set()
     for sense, target in tqdm(target_word_pairs):
+    # sense = 'vaccine.0'
+    # target = 'vaccine'
         targets.add(target)
         id = wv1.word_id[sense]
         plot_alignment(id, wv1, wv2, sense_wv_names, 
@@ -254,7 +257,6 @@ for slice_num in range(0, 6):
             f'{path}/{target}.html', flip=True)
     
     print(slice_num, ' Done')
-    break
 
 #%%
 ## Sense, its local neighbors, and aligned neighbors
