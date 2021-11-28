@@ -61,7 +61,7 @@ def make_word_pairs(
     return all_wp, target_wp
 
 ## TODO: this modifies targets long term; fix that issue up
-def remove_targets(
+def filter_targets(
     targets: List[NamedTuple], 
     align_wv: VectorVariations, 
     anchor_wv: VectorVariations):
@@ -108,6 +108,7 @@ def remove_targets(
 
     return targets
 
+## TODO: add dual SMA
 def align_vectors(
     align_method: Train_Method_Info, 
     word_pairs: Tuple[str, str], 
@@ -226,16 +227,16 @@ def predict_target_shift(
         dataset_name: str, 
         targets: List[NamedTuple],
         align_wv: VectorVariations, anchor_wv: VectorVariations,
-        output_path: str, data_path: str, 
+        output_path: str, data_path: str, slice_path: str,
         num_loops: int):
 
     print('\n================================')
-    print(f'Starting run for {align_method.name}, {align_wv.type}')
+    print(f'Starting run for {align_method.name}, {align_wv.type}, {slice_path[1:]}\n')
 
     ## Pull and prep vector data
-    align_wv, anchor_wv = load_wordvectors(align_wv, anchor_wv,
+    align_wv, anchor_wv = load_wordvectors(align_wv, anchor_wv, slice_path,
         f'{data_path}/word_vectors/{dataset_name}')
-    targets = remove_targets(targets, align_wv, anchor_wv)
+    targets = filter_targets(targets, align_wv, anchor_wv)
     all_word_pairs, target_word_pairs = make_word_pairs(align_wv.type, align_wv.normal_vec.words, targets)
 
     # TODO: could import this if I wanted to not overwrite a previous best
@@ -292,9 +293,18 @@ def predict_target_shift(
                     
                 results.to_csv(f"{path_out}/labels.csv", index=False)
 
-                ## TODO: save in JSON or plaintext?
+                ## TODO: this would be better if it was readable; 
+                ## save in JSON or plaintext instead?
+                with open(f'{path_out}/sense_landmarks.txt' , 'w') as f:
+                    for landmark in landmark_terms:
+                        if '.' in landmark:
+                            f.write(landmark)
+
                 with open(f'{path_out}/landmarks.pkl' , 'wb') as pf:
                     pickle.dump(landmark_terms, pf)
+
+                with open(f'{path_out}/landmark_ids.pkl' , 'wb') as pf:
+                    pickle.dump(landmarks, pf)
 
     print('Tests complete!')
     for classify_method, accuracy in best_accuracies.items():
@@ -303,72 +313,6 @@ def predict_target_shift(
     return all_accuracies
 
 #%%
-## TODO: add a sweep dict to pass the other params
-
-## If we expect the embeddings to be similar, the number of targets would be lower.
-## 
-def align_param_sweep(
-    dataset_name, targets, num_loops, output_path,
-    align_wv, anchor_wv, align_method,
-    classify_params, classify_method_thresholds,
-    n_targets=[50, 100], # possible landmarks; amount shift is simulated on
-    n_negatives=[50, 100], 
-    rates=[.1, .25], # how much a word is shifted when simulated
-    ):
-
-        parameter_sweep = {}
-        for n_target in n_targets:
-            for n_negs in n_negatives:
-                for rate in rates:
-
-                    align_params = {"n_targets": n_target,
-                                    "n_negatives": n_negs,
-                                    "rate": rate
-                                    }
-
-                    print(f'\n\nRunning {n_target} targets, {n_negs} negatives, {rate}', end='')
-
-                    parameter_sweep[(n_target, n_negs, rate)] = \
-                            predict_target_shift(align_method, align_params, 
-                                classify_method_thresholds, classify_params,
-                                dataset_name, targets,
-                                align_wv, anchor_wv, 
-                                output_path, num_loops)
-
-        return parameter_sweep
-
-## TODO: these could be combined to one b/c the params are the same
-## TODO: class sweeps could be done on the same alignment :/ maybe break it up so it can do that then sweep?
-def classify_param_sweep(
-    dataset_name, targets, num_loops, output_path,
-    align_wv, anchor_wv, align_method,
-    align_params, classify_method_thresholds,
-    n_targets=[100, 250, 500, 750],
-    n_negatives=[100, 250, 500, 750],
-    rates=[.1, .25],
-    ):
-
-        parameter_sweep = {}
-        for n_target in n_targets:
-            for n_negs in n_negatives:
-                for rate in rates:
-
-                    classify_params = { "n_targets": n_target,
-                                        "n_negatives": n_negs,
-                                        "rate": rate
-                                    }
-
-                    print(f'\n\nRunning {n_target} targets, {n_negs} negatives, {rate}', end='')
-
-                    parameter_sweep[(n_target, n_negs, rate)] = \
-                            predict_target_shift(align_method, align_params, 
-                                classify_method_thresholds, classify_params,
-                                dataset_name, targets,
-                                align_wv, anchor_wv, 
-                                output_path, num_loops)
-
-        return parameter_sweep
-
 ## align_info should be (name, desc)
 def main(
     dataset_name:str, 
@@ -379,7 +323,7 @@ def main(
     vector_types: List[str],
     align_methods: List[Train_Method_Info]=None, 
     classify_methods: List[Train_Method_Info]=None, 
-    num_loops: int = 1):
+    num_loops: int = 1, slice_num: int = None):
 
     for vector_type in vector_types:
         for align_method in align_methods:
@@ -398,29 +342,19 @@ def main(
                                         desc = anchor_info[1], 
                                         type = anchor_type)
 
-            output_path = f'{data_path}/align_results/{dataset_name}/align_{align_info[0]}/{vector_type}'
+            if slice_num is not None:
+                slice_path = f'/slice_{slice_num}'
+            else:
+                slice_path = ''
+            output_path = f'{data_path}/align_results/{dataset_name}/align_{align_info[0]}/{vector_type}{slice_path}'
             pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
 
-            # if (align_params is None) and (align_method == 's4'):
-            #     all_accs = align_param_sweep(
-            #                 dataset_name, targets, num_loops, output_path,
-            #                 align_wv, anchor_wv, align_method,
-            #                 classify_params, classify_method_thresholds)
-            #     save_file_name = f'{align_method}_align_param_sweep'
-
-            # elif (classify_params is None) and ('s4' in classify_method_thresholds):
-            #     all_accs = classify_param_sweep(
-            #                 dataset_name, targets, num_loops, output_path,
-            #                 align_wv, anchor_wv, align_method,
-            #                 align_params, classify_method_thresholds)
-            #     save_file_name = f'{align_method}_classify_param_sweep'
-
-            # else:
             all_accs = predict_target_shift(
                             align_method, classify_methods,
                             dataset_name, targets,
                             align_wv, anchor_wv, 
-                            output_path, data_path, num_loops)
+                            output_path, data_path, slice_path,
+                            num_loops)
             save_file_name = align_method.name
             
             ## TODO: save in JSON instead
@@ -456,7 +390,7 @@ def main(
 
 #     ## Pull and prep vector data
 #     align_wv, anchor_wv = load_wordvectors(dataset_name, align_wv, anchor_wv)
-#     targets = remove_targets(targets, align_wv, anchor_wv)
+#     targets = filter_targets(targets, align_wv, anchor_wv)
 #     word_pairs = make_word_pairs(align_wv.type, align_wv.normal_vec.words, targets)
 
 #     ## Align Stuff
