@@ -60,7 +60,7 @@ def make_word_pairs(
 
     return all_wp, target_wp
 
-## TODO: this modifies targets long term; fix that issue up
+## TODO: this modifies targets long term; fix that issue
 def filter_targets(
     targets: List[NamedTuple], 
     align_wv: VectorVariations, 
@@ -94,12 +94,9 @@ def filter_targets(
         for word in sense_words:
             if word not in align_wv.normal_vec.words:
                 print(f'\t{word} : {align_wv.corpus_name}')
-
             elif word not in anchor_wv.normal_vec.words:
                 print(f'\t{word} : {anchor_wv.corpus_name}')
-            
             else:
-                # TODO: label
                 sense_targets.append(Target_Info(word, word, 0))
 
         targets = sense_targets
@@ -357,7 +354,7 @@ def main(
                             num_loops)
             save_file_name = align_method.name
             
-            ## TODO: save in JSON instead
+            ## TODO: save in JSON instead?
             print(f'Results will be saved to {output_path}')
             with open(f'{output_path}/{save_file_name}_run_results.pkl' , 'wb') as pf:
                 pickle.dump(all_accs, pf)
