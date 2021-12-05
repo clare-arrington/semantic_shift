@@ -2,36 +2,42 @@
 from base_experiment import main, Target_Info, Train_Method_Info
 import pandas as pd
 
-data_path = '/home/clare/Data'
-# target_data = f'{data_path}/masking_results/semeval/ccoha1_extra/target_sense_labels.csv'
-# target_data = pd.read_csv(target_data, usecols=['target'])
-# all_targets = [t for t in target_data.target.unique()]
-# skip = []
-
-targets = []
-with open(f'{data_path}/corpus_data/semeval/truth/binary.txt') as fin:
-    og_targets = fin.read().strip().split('\n')
-    for target in og_targets:
-        target, label = target.split('\t')
-        label = bool(int(label))
-        word, pos = target.split('_')
-
-        target = Target_Info(word=word, shifted_word=target, is_shifted=label)
+def get_targets(data_path, corpus_name, run, all_targets=False):
+    if all_targets:
+        target_data = f'{data_path}/masking_results/semeval/{corpus_name}/target_sense_labels.pkl'
+        target_data = pd.read_pickle(target_data)
+        all_targets = [t for t in target_data.target.unique()]
+    else: 
+        all_targets = []
+    
+    targets = []
+    with open(f'{data_path}/corpus_data/semeval/truth/binary.txt') as fin:
+        og_targets = fin.read().strip().split('\n')
+        for target in og_targets:
+            target, label = target.split('\t')
+            label = bool(int(label))
+            if run == 'sense':
+                word, pos = target.split('_')
+            else:
+                word = target
+            target = Target_Info(word=word, shifted_word=target, is_shifted=label)
+            targets.append(target)
+            if word in all_targets:
+                all_targets.remove(word)
+            
+    for target in all_targets:
+        target = Target_Info(word=target, shifted_word=target, is_shifted=None)
         targets.append(target)
-        # skip.append(word)
 
-# for target in all_targets:
-#     if target in skip:
-#         continue
-#     target = Target_Info(word=target, shifted_word=target, is_shifted=None)
-#     targets.append(target)
-        
-print(f'{len(targets)} targets loaded')
+    print(f'{len(targets)} targets loaded')
+    print(targets[:5])
+    return targets
 
 ## Data Info
+data_path = '/home/clare/Data'
 dataset_name = 'semeval'
-anchor_info = ('ccoha2', 'CCOHA 1960 - 2010')
-align_info  = ('ccoha1', 'CCOHA 1810 - 1860')
+align_info = ('2000s', 'CCOHA 1960 - 2010')
+anchor_info = ('1800s', 'CCOHA 1810 - 1860')
 
 #%%
 # Results from paper
@@ -55,7 +61,7 @@ cos_classify_params = { "rate": 1.5,
                 "n_negatives": 100}
 
 align_methods = [
-    #Train_Method_Info('global', None),
+    Train_Method_Info('global', None),
     Train_Method_Info('s4', s4_align_params)
 ]
 
@@ -65,14 +71,16 @@ classify_methods = [
 ]
 
 #%%
-vector_types = ['sense']
+for v_type in ['new','sense']:
+    targets = get_targets(data_path, align_info[0], v_type)
+    print(f'{len(targets)} targets loaded')
 
-main(
-    dataset_name, data_path,
-    targets,
-    align_info, anchor_info,
-    vector_types,
-    align_methods, classify_methods,
-    num_loops=10)
+    main(
+        dataset_name, data_path,
+        targets,
+        align_info, anchor_info,
+        [v_type],
+        align_methods, classify_methods,
+        num_loops=10)
 
 # %%
