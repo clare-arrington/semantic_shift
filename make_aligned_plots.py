@@ -1,5 +1,6 @@
 #%%
 from base_experiment import filter_targets, make_word_pairs, Target_Info
+from us_uk import get_us_uk_targets
 from temp.alignment import align
 from temp.wordvectors import WordVectors, VectorVariations, load_wordvectors, intersection, extend_normal_with_sense
 from sklearn.decomposition import PCA
@@ -119,7 +120,7 @@ def plot_alignment( id, main_wv, other_wv,
 
 def prep_vectors(
     align_wv, anchor_wv, dataset_name, 
-    data_path, slice_path, targets,
+    data_path, targets, slice_path='',
     norm=False):
 
     align_wv, anchor_wv = load_wordvectors(align_wv, anchor_wv, slice_path,
@@ -202,50 +203,89 @@ def run_semeval():
                                 desc = '1960 - 2010', 
                                 type = 'new')
 
+def news_slices():
+    for slice_num in range(0, 6):
+        data_path = '/data/arrinj'
+        dataset_name = 'news'
+        targets = []
+        with open(f'{data_path}/corpus_data/{dataset_name}/targets.txt') as fin:
+            og_targets = fin.read().strip().split('\n')
+            for target in og_targets:
+                target = Target_Info(word=target, shifted_word=target, is_shifted=True)
+                targets.append(target)
+
+        ## Swap
+        anchor_wv = VectorVariations(corpus_name = 'mainstream',
+                                desc = 'Mainstream news corpus', 
+                                type = 'new')
+        align_wv = VectorVariations(corpus_name = 'alternative',
+                                    desc = 'Pseudoscience health corpus', 
+                                    type = 'sense')
+
+        if slice_num is not None:
+            slice_path = f'/slice_{slice_num}'
+        else:
+            slice_path = ''
+
+        target_word_pairs = prep_vectors(
+            align_wv, anchor_wv, dataset_name, 
+            data_path, targets, slice_path, norm=True) 
+
+        ## TODO: would be ideal to have this be more than just the intersection
+        # wv1 = align_wv.partial_align_vec
+        # wv2 = anchor_wv.partial_align_vec
+        wv1 = align_wv.post_align_vec
+        wv2 = anchor_wv.post_align_vec
+        sense_wv_names = [align_wv.desc, anchor_wv.desc]
+        target_wv_names = [anchor_wv.desc, align_wv.desc]
+
+        path = f'{data_path}/plots/align_{align_wv.corpus_name}{slice_path}'
+        Path(path).mkdir(parents=True, exist_ok=True)
+
+        targets = set()
+        for sense, target in tqdm(target_word_pairs):
+        # sense = 'vaccine.0'
+        # target = 'vaccine'
+            targets.add(target)
+            id = wv1.word_id[sense]
+            plot_alignment(id, wv1, wv2, sense_wv_names, 
+                f'{path}/{sense}.html')
+
+        for target in tqdm(list(targets)):
+            id = wv2.word_id[target]
+            plot_alignment(id, wv2, wv1, target_wv_names, 
+                f'{path}/{target}.html', flip=True)
+        
+        print(slice_num, ' Done')
+
+
 #%%
-
-for slice_num in range(0, 6):
+def us_uk():
     data_path = '/data/arrinj'
-    dataset_name = 'news'
-    targets = []
-    with open(f'{data_path}/corpus_data/{dataset_name}/targets.txt') as fin:
-        og_targets = fin.read().strip().split('\n')
-        for target in og_targets:
-            target = Target_Info(word=target, shifted_word=target, is_shifted=True)
-            targets.append(target)
+    dataset_name = 'us_uk'
+    targets = get_us_uk_targets(data_path, get_uk=True)
 
-    ## Swap
-    anchor_wv = VectorVariations(corpus_name = 'mainstream',
-                            desc = 'Mainstream news corpus', 
-                            type = 'new')
-    align_wv = VectorVariations(corpus_name = 'alternative',
-                                desc = 'Pseudoscience health corpus', 
-                                type = 'sense')
-
-    if slice_num is not None:
-        slice_path = f'/slice_{slice_num}'
-    else:
-        slice_path = ''
+    align_wv = VectorVariations(corpus_name = 'bnc',
+                            desc = 'UK corpus (BNC)', 
+                            type = 'sense')
+    anchor_wv = VectorVariations(corpus_name = 'coca',
+                                desc = 'English corpus (COCA)', 
+                                type = 'new')
 
     target_word_pairs = prep_vectors(
         align_wv, anchor_wv, dataset_name, 
-        data_path, slice_path, targets, norm=True) 
+        data_path, targets, norm=True) 
 
-    ## TODO: would be ideal to have this be more than just the intersection
-    # wv1 = align_wv.partial_align_vec
-    # wv2 = anchor_wv.partial_align_vec
     wv1 = align_wv.post_align_vec
     wv2 = anchor_wv.post_align_vec
     sense_wv_names = [align_wv.desc, anchor_wv.desc]
     target_wv_names = [anchor_wv.desc, align_wv.desc]
 
-    path = f'{data_path}/plots/align_{align_wv.corpus_name}{slice_path}'
+    path = f'{data_path}/plots/align_{align_wv.corpus_name}'
     Path(path).mkdir(parents=True, exist_ok=True)
 
     targets = set()
     for sense, target in tqdm(target_word_pairs):
-    # sense = 'vaccine.0'
-    # target = 'vaccine'
         targets.add(target)
         id = wv1.word_id[sense]
         plot_alignment(id, wv1, wv2, sense_wv_names, 
@@ -255,9 +295,65 @@ for slice_num in range(0, 6):
         id = wv2.word_id[target]
         plot_alignment(id, wv2, wv1, target_wv_names, 
             f'{path}/{target}.html', flip=True)
-    
-    print(slice_num, ' Done')
-
+        
+    print('Done')
 #%%
 ## Sense, its local neighbors, and aligned neighbors
 ## Target, its local neighbors, and aligned neighbors
+
+def pairwise_plots():
+    for slice_num in range(0, 6):
+        data_path = '/data/arrinj'
+        dataset_name = 'news'
+        targets = []
+        with open(f'{data_path}/corpus_data/{dataset_name}/targets.txt') as fin:
+            og_targets = fin.read().strip().split('\n')
+            for target in og_targets:
+                target = Target_Info(word=target, shifted_word=target, is_shifted=True)
+                targets.append(target)
+
+        ## Swap
+        anchor_wv = VectorVariations(corpus_name = 'mainstream',
+                                desc = 'Mainstream news corpus', 
+                                type = 'new')
+        align_wv = VectorVariations(corpus_name = 'alternative',
+                                    desc = 'Pseudoscience health corpus', 
+                                    type = 'sense')
+
+        if slice_num is not None:
+            slice_path = f'/slice_{slice_num}'
+        else:
+            slice_path = ''
+
+        target_word_pairs = prep_vectors(
+            align_wv, anchor_wv, dataset_name, 
+            data_path, slice_path, targets, norm=True) 
+
+        ## TODO: would be ideal to have this be more than just the intersection
+        # wv1 = align_wv.partial_align_vec
+        # wv2 = anchor_wv.partial_align_vec
+        wv1 = align_wv.post_align_vec
+        wv2 = anchor_wv.post_align_vec
+        sense_wv_names = [align_wv.desc, anchor_wv.desc]
+        target_wv_names = [anchor_wv.desc, align_wv.desc]
+
+        path = f'{data_path}/plots/align_{align_wv.corpus_name}{slice_path}'
+        Path(path).mkdir(parents=True, exist_ok=True)
+
+        targets = set()
+        for sense, target in tqdm(target_word_pairs):
+        # sense = 'vaccine.0'
+        # target = 'vaccine'
+            targets.add(target)
+            id = wv1.word_id[sense]
+            plot_alignment(id, wv1, wv2, sense_wv_names, 
+                f'{path}/{sense}.html')
+
+        for target in tqdm(list(targets)):
+            id = wv2.word_id[target]
+            plot_alignment(id, wv2, wv1, target_wv_names, 
+                f'{path}/{target}.html', flip=True)
+        
+        print(slice_num, ' Done')
+
+us_uk()
