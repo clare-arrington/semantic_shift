@@ -127,10 +127,8 @@ def prep_vectors(
         f'{data_path}/word_vectors/{dataset_name}')
 
     if norm:
-        ## TODO: this does work
         align_wv.normal_vec.normalize()
         anchor_wv.normal_vec.normalize()
-        # vec_len = np.linalg.norm(model.wv[word])
 
     targets = filter_targets(targets, align_wv, anchor_wv)
     all_word_pairs, target_word_pairs = make_word_pairs(
@@ -182,26 +180,6 @@ def get_neighbor_coordinates(x):
     Apply decomposition to an input matrix and returns a 2d set of points.
     """
     return list(PCA(n_components=2).fit_transform(x))
-
-def run_semeval():
-    data_path = '/home/clare/Data'
-    dataset_name = 'semeval'
-    targets = []
-    with open(f'{data_path}/corpus_data/semeval/truth/binary.txt') as fin:
-        og_targets = fin.read().strip().split('\n')
-        for target in og_targets:
-            target, label = target.split('\t')
-            label = bool(int(label))
-            word, pos = target.split('_')
-            target = Target_Info(word=word, shifted_word=target, is_shifted=label)
-            targets.append(target)
-
-    align_wv = VectorVariations(corpus_name = 'ccoha1_0',
-                            desc = '1810 - 1860', 
-                            type = 'sense')
-    anchor_wv = VectorVariations(corpus_name = 'ccoha2',
-                                desc = '1960 - 2010', 
-                                type = 'new')
 
 def news_slices():
     for slice_num in range(0, 6):
@@ -258,20 +236,10 @@ def news_slices():
         
         print(slice_num, ' Done')
 
-
-#%%
-def us_uk():
-    data_path = '/data/arrinj'
-    dataset_name = 'us_uk'
-    targets = get_us_uk_targets(data_path, get_uk=True)
-
-    align_wv = VectorVariations(corpus_name = 'bnc',
-                            desc = 'UK corpus (BNC)', 
-                            type = 'sense')
-    anchor_wv = VectorVariations(corpus_name = 'coca',
-                                desc = 'English corpus (COCA)', 
-                                type = 'new')
-
+def generic_run(
+    data_path, dataset_name, 
+    targets, align_wv, anchor_wv
+    ):
     target_word_pairs = prep_vectors(
         align_wv, anchor_wv, dataset_name, 
         data_path, targets, norm=True) 
@@ -282,6 +250,7 @@ def us_uk():
     target_wv_names = [anchor_wv.desc, align_wv.desc]
 
     path = f'{data_path}/plots/align_{align_wv.corpus_name}'
+    print(f'Going to save plots to {path}')
     Path(path).mkdir(parents=True, exist_ok=True)
 
     targets = set()
@@ -297,6 +266,100 @@ def us_uk():
             f'{path}/{target}.html', flip=True)
         
     print('Done')
+
+def run_us_uk(swap=False):
+    data_path = '/data/arrinj'
+    dataset_name = 'us_uk'
+    targets = get_us_uk_targets(data_path, get_uk=True)
+
+    if swap:
+        anchor_wv = VectorVariations(corpus_name = 'bnc',
+                                desc = 'UK corpus (BNC)', 
+                                type = 'sense')
+        align_wv = VectorVariations(corpus_name = 'coca',
+                                    desc = 'English corpus (COCA)', 
+                                    type = 'new')
+    else:
+        align_wv = VectorVariations(corpus_name = 'bnc',
+                                desc = 'UK corpus (BNC)', 
+                                type = 'sense')
+        anchor_wv = VectorVariations(corpus_name = 'coca',
+                                    desc = 'English corpus (COCA)', 
+                                    type = 'new')
+
+    generic_run(data_path, dataset_name, 
+                targets, align_wv, anchor_wv
+                )
+
+def run_semeval(swap=False):
+    data_path = '/home/clare/Data'
+    dataset_name = 'semeval'
+
+    targets = []
+    with open(f'{data_path}/corpus_data/semeval/truth/binary.txt') as fin:
+        og_targets = fin.read().strip().split('\n')
+        for target in og_targets:
+            target, label = target.split('\t')
+            label = bool(int(label))
+            word, pos = target.split('_')
+            target = Target_Info(word=word, shifted_word=target, is_shifted=label)
+            targets.append(target)
+
+    if swap:
+        align_wv = VectorVariations(corpus_name = '1800s',
+                                desc = '1810 - 1860', 
+                                type = 'sense')
+        anchor_wv = VectorVariations(corpus_name = '2000s',
+                                    desc = '1960 - 2010', 
+                                    type = 'new')
+    else:
+        align_wv = VectorVariations(corpus_name = '2000s',
+                        desc = '1960 - 2010', 
+                        type = 'sense')
+        anchor_wv = VectorVariations(corpus_name = '1800s',
+                                    desc = '1810 - 1860', 
+                                    type = 'new')
+
+    generic_run(data_path, dataset_name, 
+                targets, align_wv, anchor_wv
+                )
+
+def run_news(swap=False):
+    data_path = '/data/arrinj'
+    dataset_name = 'news'
+
+    targets = []
+    with open(f'{data_path}/corpus_data/{dataset_name}/targets.txt') as fin:
+        og_targets = fin.read().strip().split('\n')
+        for target in og_targets:
+            target = Target_Info(word=target, shifted_word=target, is_shifted=True)
+            targets.append(target)
+
+    if swap:
+        align_wv = VectorVariations(corpus_name = 'mainstream',
+                    desc = 'Mainstream news corpus', 
+                    type = 'new')
+        anchor_wv = VectorVariations(corpus_name = 'conspiracy',
+                    desc = 'Political conspiracy corpus', 
+                    type = 'sense')
+        # anchor_wv = VectorVariations(corpus_name = 'alternative',
+        #                             desc = 'Pseudoscience health corpus', 
+        #                             type = 'sense')
+    else:
+        anchor_wv = VectorVariations(corpus_name = 'mainstream',
+                    desc = 'Mainstream news corpus', 
+                    type = 'new')
+        # align_wv = VectorVariations(corpus_name = 'conspiracy',
+        #             desc = 'Political conspiracy corpus', 
+        #             type = 'sense')
+        align_wv = VectorVariations(corpus_name = 'alternative',
+                                    desc = 'Pseudoscience health corpus', 
+                                    type = 'sense')
+
+    generic_run(data_path, dataset_name, 
+                targets, align_wv, anchor_wv
+                )
+
 #%%
 ## Sense, its local neighbors, and aligned neighbors
 ## Target, its local neighbors, and aligned neighbors
@@ -356,4 +419,6 @@ def pairwise_plots():
         
         print(slice_num, ' Done')
 
-us_uk()
+# run_us_uk()
+# run_semeval(swap=False)
+run_news()
