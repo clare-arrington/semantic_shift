@@ -10,6 +10,7 @@ from scipy.spatial.distance import cosine
 
 from typing import Tuple, NamedTuple, List
 from collections import namedtuple
+import itertools
 import pathlib
 import pickle
 import numpy as np
@@ -231,8 +232,9 @@ def predict_target_shift(
     print(f'Starting run for {align_method.name}, {align_wv.type}, {slice_path[1:]}\n')
 
     ## Pull and prep vector data
+    ## TODO: normalize could be a param
     align_wv, anchor_wv = load_wordvectors(align_wv, anchor_wv, slice_path,
-        f'{data_path}/word_vectors/{dataset_name}')
+        f'{data_path}/word_vectors/{dataset_name}', normalize=True)
     targets = filter_targets(targets, align_wv, anchor_wv)
     all_word_pairs, target_word_pairs = make_word_pairs(align_wv.type, align_wv.normal_vec.words, targets)
 
@@ -322,39 +324,38 @@ def main(
     classify_methods: List[Train_Method_Info]=None, 
     num_loops: int = 1, slice_num: int = None):
 
-    for vector_type in vector_types:
-        for align_method in align_methods:
-            if vector_type in ['original', 'new', 'both_sense']:
-                align_type = vector_type
-                anchor_type = vector_type
-            
-            elif vector_type == 'sense':
-                align_type = vector_type
-                anchor_type = 'new'
+    for vector_type, align_method in itertools.product(vector_types, align_methods):
 
-            align_wv = VectorVariations(corpus_name = align_info[0],
-                                    desc = align_info[1], 
-                                    type = align_type)
-            anchor_wv = VectorVariations(corpus_name = anchor_info[0],
-                                        desc = anchor_info[1], 
-                                        type = anchor_type)
+        if vector_type in ['original', 'new', 'both_sense']:
+            align_type = vector_type
+            anchor_type = vector_type        
+        elif vector_type == 'sense':
+            align_type = vector_type
+            anchor_type = 'new'
 
-            if slice_num is not None:
-                slice_path = f'/slice_{slice_num}'
-            else:
-                slice_path = ''
-            output_path = f'{data_path}/align_results/{dataset_name}/align_{align_info[0]}/{vector_type}{slice_path}'
-            pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
+        align_wv = VectorVariations(corpus_name = align_info[0],
+                                desc = align_info[1], 
+                                type = align_type)
+        anchor_wv = VectorVariations(corpus_name = anchor_info[0],
+                                    desc = anchor_info[1], 
+                                    type = anchor_type)
 
-            all_accs = predict_target_shift(
-                            align_method, classify_methods,
-                            dataset_name, targets,
-                            align_wv, anchor_wv, 
-                            output_path, data_path, slice_path,
-                            num_loops)
-            save_file_name = align_method.name
-            
-            ## TODO: save in JSON instead?
-            print(f'Results will be saved to {output_path}')
-            with open(f'{output_path}/{save_file_name}_run_results.pkl' , 'wb') as pf:
-                pickle.dump(all_accs, pf)
+        if slice_num is not None:
+            slice_path = f'/slice_{slice_num}'
+        else:
+            slice_path = ''
+        output_path = f'{data_path}/align_results/{dataset_name}/align_{align_info[0]}/{vector_type}{slice_path}'
+        pathlib.Path(output_path).mkdir(parents=True, exist_ok=True)
+
+        all_accs = predict_target_shift(
+                        align_method, classify_methods,
+                        dataset_name, targets,
+                        align_wv, anchor_wv, 
+                        output_path, data_path, slice_path,
+                        num_loops)
+        save_file_name = align_method.name
+        
+        ## TODO: save in JSON instead?
+        print(f'Results will be saved to {output_path}')
+        with open(f'{output_path}/{save_file_name}_run_results.pkl' , 'wb') as pf:
+            pickle.dump(all_accs, pf)
