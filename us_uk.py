@@ -1,7 +1,5 @@
 #%%
-from os import name
 from base_experiment import main, Target_Info, Train_Method_Info
-import pickle
 
 def get_us_uk_targets(path, get_us=False, get_uk=False):
     targets = []
