@@ -1,7 +1,7 @@
 from typing import Dict, Tuple, NamedTuple
 import pandas as pd
 
-def print_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame, 
+def print_single_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame, 
                        threshold: float, path_out: str, 
                        align_vector: NamedTuple, anchor_vector: NamedTuple):
 
@@ -11,27 +11,64 @@ def print_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame,
         print(f'\t - cosine distance of sense in aligned vector {align_vector.desc} \
                 \n\t to target word in unchanged vector {anchor_vector.desc}', file=fout)
         print(f'\t - count of sense in aligned vector {align_vector.desc}\n', file=fout)
+        print(f'Distance threshold = {threshold:.2f}\n\n', file=fout)
 
         print('Format for each target is...', file=fout)
         print('target : true label', file=fout)
         print('\tSense # : cos. dist, count, threshold label', file=fout)
-        print(f'\nDistance threshold = {threshold:.2f}', file=fout)
+
+        is_shifted = {  0: 'not shifted', 
+                            1: 'shifted', 
+                            'No Shift': 'not shifted', 
+                            'Shifted': 'shifted'}
 
         for target, info in sense_dists.items():        
-            is_shifted = results[results.Words == target]['True Label'].iloc[0]
-            if is_shifted == 'No Shift':
-                print(f'\n{target} : not shifted', file=fout)
-            else:
-                print(f'\n{target} : shifted', file=fout)
+            label = results[results.Words == target]['True Label'].iloc[0]
+            print(f'\n{target} : {is_shifted[label]}', file=fout)
             
             sense_sorted = sorted(info, key=lambda tup: tup[0])
-            for sense, dist, count, _ in sense_sorted:
-                if dist > threshold:
-                    is_shifted = 'shifted'
-                else:
-                    is_shifted = 'not shifted'
+            for sense, dist, count, label in sense_sorted:
+                print(f'\tSense {sense[-1]} : {dist:.2f}, {count}, {is_shifted[label]}', file=fout)
 
-                print(f'\tSense {sense[-1]} : {dist:.2f}, {count}, {is_shifted}', file=fout)
+def print_both_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame, 
+                       threshold: float, path_out: str, 
+                       align_vector: NamedTuple, anchor_vector: NamedTuple):
+
+    with open(f'{path_out}/senses.txt', 'w') as fout:
+
+        print('Sense breakdown for each target word with:', file=fout)
+        print(f'\t - cosine distance of sense in aligned vector {align_vector.desc} \
+                \n\t to target word in sense vector {anchor_vector.desc}', file=fout)
+        print(f'\t - count of senses in both vector {align_vector.desc}\n', file=fout)
+        print(f'Distance threshold = {threshold:.2f}\n', file=fout)
+        print('=====================================================\n', file=fout)
+
+        print('Format for each target is...', file=fout)
+        print('target : true label', file=fout)
+        print('\tAlign Sense # : count', file=fout)
+        print('\t\tAnchor Sense # : cos. dist, count, label based on threshold', file=fout)
+        print('\n=====================================================', file=fout)
+
+        is_shifted = {  0: 'not shifted', 
+                            1: 'shifted', 
+                            'No Shift': 'not shifted', 
+                            'Shifted': 'shifted'}
+
+        for target, info in sense_dists.items():        
+            label = results[results.Words == target]['True Label'].iloc[0]
+            print(f'\n{target} : {is_shifted[label]}', file=fout)
+            
+            sense_sorted = sorted(info, key=lambda tup: tup[:2])
+            printed = []
+            for sense, anchor, count, anchor_wc, dist, label in sense_sorted:
+                if sense not in printed:
+                    if '0' not in sense:
+                        print('', file=fout)
+                    print(f'\tAlign Sense {sense[-1]} : {count}', file=fout)
+                    printed.append(sense)
+
+                print(f'\t\tAnchor Sense {anchor[-1]} : {dist:.2f}, {anchor_wc}, {is_shifted[label]}', file=fout)
+
 
 def print_shift_info(accuracies: Dict[str,float], results: pd.DataFrame, path_out: str, 
                      align_method: str, classify_method: str, threshold: float,

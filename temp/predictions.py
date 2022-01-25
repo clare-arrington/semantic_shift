@@ -21,47 +21,26 @@ def assess_standard_prediction(predictions, threshold: float, targets: List[Name
 ## Go through each sense from the sense embedding (word.#) and find its distance to the word 
 ## connected to it in the anchored embedding
 ## This could be the same word, a translated word, etc
-def make_sense_prediction(predictions, threshold, align_model, anchor_model, word_pairs):
+def get_prediction_info(predictions, threshold, align_model, anchor_model, word_pairs):
     prediction_info = defaultdict(list)
     for word_pair, dist in zip(word_pairs, predictions):
         sense_word, anchor_word = word_pair
         shift_prediction = int(dist > threshold)
 
         word_count = align_model.wv.get_vecattr(sense_word, "count")
-        if sense_word in anchor_model.wv:
-            word_count += anchor_model.wv.get_vecattr(sense_word, "count")
+        anchor_wc = anchor_model.wv.get_vecattr(anchor_word, "count")
         
+        info = (sense_word, anchor_word, word_count, anchor_wc, dist, shift_prediction)
         target = sense_word.split('.')[0]
-
-        info = (sense_word, dist, word_count, shift_prediction)
         prediction_info[target].append(info)
 
-    # skipped_senses = [
-    #     'chairman.0', 'fiction.0', 'multitude.0',
-    #     'multitude.2', 'player.0', 'record.1', 'record.2'
-    # ]
-    # for sense_word in skipped_senses:
-    #     if sense_word in align_model.wv:
-    #         word_count = align_model.wv.get_vecattr(sense_word, "count")
-    #     elif sense_word in anchor_model.wv:
-    #         word_count = anchor_model.wv.get_vecattr(sense_word, "count")
-    #     else:
-    #         word_count = 19
+    return prediction_info
 
-    #     dist = threshold * 1.01
-    #     shift_prediction = int(dist > threshold)
-    #     target = sense_word.split('.')[0]
-
-    #     info = (sense_word, dist, word_count, shift_prediction)
-    #     prediction_info[target].append(info)
-
-
-    # TODO: this could be passed in if we only wanted to do a subset
-    shift_labels = ['Majority', 'Main', 'Weighted']
-    shift_data = {shift : [] for shift in shift_labels}
+def make_sense_prediction(prediction_info, threshold):
 
     ratios = [.05, .1, .15, .2]
     ratio_data = defaultdict(list)
+    shift_data = {shift : [] for shift in ['Majority', 'Main', 'Weighted']}
 
     for target, sense_predictions in prediction_info.items():
         
@@ -70,7 +49,7 @@ def make_sense_prediction(predictions, threshold, align_model, anchor_model, wor
         weighted_dist = 0
         shifts = []
 
-        for sense, dist, count, shift_prediction in sense_predictions:
+        for sense, anchor, count, anch_c, dist, shift_prediction in sense_predictions:
             weighted_dist += (dist * count)
 
             shifts.append(shift_prediction)
@@ -84,7 +63,7 @@ def make_sense_prediction(predictions, threshold, align_model, anchor_model, wor
         shift_data['Majority'].append(is_shifted)
 
         biggest_sense = max(sense_predictions, key=lambda t: t[2])
-        is_shifted = biggest_sense[3]
+        is_shifted = biggest_sense[5]
         shift_data['Main'].append(is_shifted)
 
         weighted_dist /= (shifted_count + unshifted_count)
@@ -97,24 +76,12 @@ def make_sense_prediction(predictions, threshold, align_model, anchor_model, wor
             ratio_cutoff = f'{int(ratio_cutoff*100)}%'
             ratio_data[ratio_cutoff].append(is_shifted)
 
-    return prediction_info, shift_data, ratio_data
+    return shift_data, ratio_data
 
 def assess_sense_prediction(shift_data, ratio_data, targets: List[NamedTuple]):
     
     target_words, _, true_labels = list(zip(*targets)) 
     
-    ## TODO: why did I have this instead function?  
-    # with open('/home/clare/Data/corpus_data/semeval/truth/binary.txt') as fin:
-    #     og_targets = fin.read().strip().split('\n')
-    #     true_labels = []
-    #     target_words = []
-    #     for target in sorted(og_targets):
-    #         target, label = target.split('\t')
-    #         label = bool(int(label))
-    #         word, pos = target.split('_')
-    #         true_labels.append(label)
-    #         target_words.append(word)
-
     accuracies = {}
     for method, shift_pred in shift_data.items():
         accuracy = accuracy_score(true_labels, shift_pred)
@@ -136,8 +103,3 @@ def assess_sense_prediction(shift_data, ratio_data, targets: List[NamedTuple]):
             results[label] = results[label].astype(int).map({0:'No Shift', 1:'Shifted'})
 
     return accuracies, results
-
-# for target, info in prediction_info.items():
-#     print(target.capitalize())
-#     for sense in info:
-#         print(f'\t{sense[0]} : {sense[1]:.2f}')

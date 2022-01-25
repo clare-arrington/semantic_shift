@@ -14,13 +14,21 @@ def get_targets(data_path, corpus_name, run, all_targets=False):
     with open(f'{data_path}/corpus_data/semeval/truth/binary.txt') as fin:
         og_targets = fin.read().strip().split('\n')
         for target in og_targets:
-            target, label = target.split('\t')
+            target_pos, label = target.split('\t')
             label = bool(int(label))
-            if run == 'sense':
-                word, pos = target.split('_')
-            else:
+            target, pos = target_pos.split('_') 
+
+            if run == 'SSA':
                 word = target
-            target = Target_Info(word=word, shifted_word=target, is_shifted=label)
+                shifted_word = target_pos
+            elif run == 'BSA':                             
+                word = target
+                shifted_word = target
+            else:
+                word = target_pos
+                shifted_word = target_pos
+                
+            target = Target_Info(word, shifted_word, is_shifted=label)
             targets.append(target)
             if word in all_targets:
                 all_targets.remove(word)
@@ -36,8 +44,8 @@ def get_targets(data_path, corpus_name, run, all_targets=False):
 ## Data Info
 data_path = '/home/clare/Data'
 dataset_name = 'semeval'
-align_info = ('2000s', 'CCOHA 1960 - 2010')
-anchor_info = ('1800s', 'CCOHA 1810 - 1860')
+anchor_info = ('2000s', 'CCOHA 1960 - 2010')
+align_info = ('1800s', 'CCOHA 1810 - 1860')
 
 #%%
 # Results from paper
@@ -66,20 +74,19 @@ align_methods = [
 ]
 
 classify_methods = [
-    Train_Method_Info('cosine', cos_classify_params, 0)
-    #Train_Method_Info('s4', s4_classify_params, .5)
+    Train_Method_Info('cosine', cos_classify_params, 0),
+    Train_Method_Info('s4', s4_classify_params, .5)
 ]
 
 #%%
-for v_type in ['new','sense']:
-    targets = get_targets(data_path, align_info[0], v_type)
-    print(f'{len(targets)} targets loaded')
+for sense_method in ['BSA']:
+    targets = get_targets(data_path, align_info[0], sense_method)
 
     main(
         dataset_name, data_path,
         targets,
         align_info, anchor_info,
-        [v_type],
+        [sense_method],
         align_methods, classify_methods,
         num_loops=10)
 
