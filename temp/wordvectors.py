@@ -22,8 +22,10 @@ def intersection(*args):
     # the resulting order will follow the first WordVectors's order
     # Get intersecting words
     common_words = set.intersection(*[set(wv.words) for wv in args])
+
     # Get intersecting words following the order of first WordVector
-    words = [w for w in args[0].words if w in common_words]
+    # Can't let any sense words at this point because they're all added later (prevents duplicates)
+    words = [w for w in args[0].words if w in common_words and '.' not in w]
 
     # Retrieve vectors from a and b for intersecting words
     wv_out = list()  # list of output WordVectors
@@ -32,7 +34,6 @@ def intersection(*args):
 
     return wv_out
 
-## TODO: add to VecVar
 def extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs):
     wv1_words = wv1.words.copy()
     wv1_vectors = list(wv1.vectors.copy())
@@ -40,7 +41,9 @@ def extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs):
     wv2_vectors = list(wv2.vectors.copy())
 
     for sense, target in word_pairs:
+        ## TODO: not all of the senses got removed for some reason? 
         if sense == target and sense in wv1_words:
+            print(sense, target)
             continue
 
         # print(f'Adding {sense} : {target}')
@@ -237,17 +240,33 @@ class VectorVariations:
         self.type=type
         self.model=None
 
+        self.terms_with_sense=None
+        self.senses=None
+
         self.normal_vec=None
         self.extended_vec=None
         self.partial_align_vec=None
         self.post_align_vec=None
 
+def get_senses(vocab):
+    senses = []
+    targets = set()
+    for word in vocab:
+        if '.' in word:
+            senses.append(word)
+            target, num = word.split('.')
+            targets.add(target)
+
+    return senses, list(targets)
+    
 def load_w2v_vectors(vector, vector_path, slice_path):
     vector.model = Word2Vec.load(
         f'{vector_path}/{vector.type}/{vector.corpus_name}{slice_path}.vec')
     vocab = list(vector.model.wv.index_to_key)
     vectors = vector.model.wv.vectors
     vector.normal_vec = WordVectors(words=vocab, vectors=vectors)
+
+    vector.senses, vector.terms_with_sense = get_senses(vocab)
 
     return vector
 
