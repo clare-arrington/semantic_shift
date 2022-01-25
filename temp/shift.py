@@ -302,7 +302,7 @@ def s4(wv1, wv2, extended_wv1=None, extended_wv2=None,
 
     model = build_keras_model(wv1.dimension*2)
 
-    # General set of histories
+    # General set of histories (iterative data)
     hist = {
         "num_landmarks"  : [],   # store no. of landmark history
         "loss"   : [],   # store self-supervision loss history
