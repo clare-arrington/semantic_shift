@@ -34,6 +34,9 @@ def intersection(*args):
 
     return wv_out
 
+## When I do this, each word will have an ID corresponding with its last occurence, 
+# so if a word is added 3 times starting at position n, its ID will be n + 2.
+## TODO: look into both sense
 def extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs):
     wv1_words = wv1.words.copy()
     wv1_vectors = list(wv1.vectors.copy())
@@ -41,11 +44,6 @@ def extend_normal_with_sense(wv1, wv2, align_wv, anchor_wv, word_pairs):
     wv2_vectors = list(wv2.vectors.copy())
 
     for sense, target in word_pairs:
-        ## TODO: not all of the senses got removed for some reason? 
-        if sense == target and sense in wv1_words:
-            print(sense, target)
-            continue
-
         # print(f'Adding {sense} : {target}')
 
         wv1_words.append(sense)
