@@ -2,7 +2,7 @@
 from base_experiment import main, Target_Info, Train_Method_Info
 import pandas as pd
 
-def get_targets(data_path, corpus_name, run, all_targets=False):
+def get_targets(data_path, corpus_name, sense_method, all_targets=False):
     if all_targets:
         target_data = f'{data_path}/masking_results/semeval/{corpus_name}/target_sense_labels.pkl'
         target_data = pd.read_pickle(target_data)
@@ -18,10 +18,10 @@ def get_targets(data_path, corpus_name, run, all_targets=False):
             label = bool(int(label))
             target, pos = target_pos.split('_') 
 
-            if run == 'SSA':
+            if sense_method == 'SSA':
                 word = target
                 shifted_word = target_pos
-            elif run == 'BSA':                             
+            elif sense_method == 'BSA':                             
                 word = target
                 shifted_word = target
             else:
