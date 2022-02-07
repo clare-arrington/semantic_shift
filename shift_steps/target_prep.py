@@ -1,5 +1,5 @@
 import itertools
-from temp.wordvectors import VectorVariations
+from shift_steps.wordvectors import VectorVariations
 from typing import NamedTuple, List
 from collections import namedtuple
 import re

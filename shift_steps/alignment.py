@@ -1,5 +1,5 @@
  
-from temp.wordvectors import WordVectors
+from shift_steps.wordvectors import WordVectors
 from scipy.linalg import orthogonal_procrustes
 import numpy as np
 

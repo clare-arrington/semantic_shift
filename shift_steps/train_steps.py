@@ -1,6 +1,6 @@
-from temp.wordvectors import VectorVariations, WordVectors, intersection, extend_normal_with_sense
-from temp.alignment import align
-from temp.shift import s4, threshold_crossvalidation
+from shift_steps.wordvectors import VectorVariations, WordVectors, intersection, extend_normal_with_sense
+from shift_steps.alignment import align
+from shift_steps.shift import s4, threshold_crossvalidation
 from scipy.spatial.distance import cosine
 from typing import Tuple, List
 import numpy as np

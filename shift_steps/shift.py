@@ -10,8 +10,8 @@ Positives -> semantically changed
 We can begin by aligning on all words, and then learn better landmarks from
 there. Alternatively, one can start from random landmarks."""
 # Local modules
-from temp.wordvectors import WordVectors
-from temp.alignment import align
+from shift_steps.wordvectors import WordVectors
+from shift_steps.alignment import align
 
 # Third party modules
 from scipy.spatial.distance import cosine, euclidean

@@ -1,10 +1,10 @@
  
 #%%
-from temp.predictions import get_prediction_info, make_sense_prediction, assess_sense_prediction, assess_standard_prediction
-from temp.target_prep import Target_Info, filter_targets, make_word_pairs
-from temp.wordvectors import VectorVariations, load_wordvectors
-from temp.printers import print_single_sense_output, print_both_sense_output, print_shift_info, save_landmark_info
-from temp.train_steps import Train_Method_Info, align_vectors, get_target_distances
+from shift_steps.predictions import get_prediction_info, make_sense_prediction, assess_sense_prediction, assess_standard_prediction
+from shift_steps.target_prep import Target_Info, filter_targets, make_word_pairs
+from shift_steps.wordvectors import VectorVariations, load_wordvectors
+from shift_steps.printers import print_single_sense_output, print_both_sense_output, print_shift_info, save_landmark_info
+from shift_steps.train_steps import Train_Method_Info, align_vectors, get_target_distances
 
 from typing import Tuple, NamedTuple, List
 import itertools

@@ -1,8 +1,8 @@
 #%%
 from base_experiment import filter_targets, make_word_pairs, Target_Info
 from us_uk import get_us_uk_targets
-from temp.alignment import align
-from temp.wordvectors import WordVectors, VectorVariations, load_wordvectors, intersection, extend_normal_with_sense
+from shift_steps.alignment import align
+from shift_steps.wordvectors import WordVectors, VectorVariations, load_wordvectors, intersection, extend_normal_with_sense
 from sklearn.decomposition import PCA
 from sklearn.neighbors import NearestNeighbors
 from pathlib import Path
