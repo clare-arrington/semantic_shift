@@ -1,5 +1,6 @@
 from typing import Dict, Tuple, NamedTuple
 import pandas as pd
+import pickle
 
 def print_single_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame, 
                        threshold: float, path_out: str, 
@@ -115,3 +116,18 @@ def print_shift_info(accuracies: Dict[str,float], results: pd.DataFrame, path_ou
             print(f'\n{len(shifted)} predicted unshifted; correct label is shifted', file=fout)
             for word in shifted:
                 print(f'\t{word}', file=fout)
+
+def save_landmark_info(path_out, landmark_terms, landmarks):
+    with open(f'{path_out}/sense_landmarks.txt' , 'w') as f:
+        for landmark in landmark_terms:
+            if '.' in landmark:
+                f.write(landmark)
+                f.write('\n')
+
+    ## I save both to be safe; you can verify the models are 
+    ## the same if these two sets pull the same information
+    with open(f'{path_out}/landmarks.pkl' , 'wb') as pf:
+        pickle.dump(landmark_terms, pf)
+
+    with open(f'{path_out}/landmark_ids.pkl' , 'wb') as pf:
+        pickle.dump(landmarks, pf)
