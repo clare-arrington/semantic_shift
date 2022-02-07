@@ -1,13 +1,14 @@
  
+from temp.wordvectors import WordVectors
 from scipy.linalg import orthogonal_procrustes
 import numpy as np
-from temp.wordvectors import WordVectors
 
 # Word alignment module
-def align(wv1, wv2, anchor_indices=None, anchor_words=None, anchor_top=None,
-           anchor_bot=None, anchor_random=None,
-           exclude={},
-           method="procrustes"):
+def align(wv1, wv2, anchor_indices=None, anchor_words=None, 
+        anchor_top=None, anchor_bot=None, 
+        anchor_random=None, anchor_pairs=None,
+        exclude={},
+        method="procrustes"):
     """
     Implement OP alignment for a given set of landmarks.
     If no landmark is given, performs global alignment.
@@ -35,9 +36,13 @@ def align(wv1, wv2, anchor_indices=None, anchor_words=None, anchor_top=None,
     elif anchor_words is not None:
         v1 = [wv1[w] for w in anchor_words if w not in exclude]
         v2 = [wv2[w] for w in anchor_words if w not in exclude]
+    elif anchor_pairs is not None:
+        v1 = [wv1[w1] for w1, w2 in anchor_pairs if (w1 not in exclude) and (w2 not in exclude) ]
+        v2 = [wv2[w2] for w1, w2 in anchor_pairs if (w1 not in exclude) and (w2 not in exclude)]
     else:  # just use all words
         v1 = [wv1[w] for w in wv1.words if w not in exclude]
         v2 = [wv2[w] for w in wv2.words if w not in exclude]
+
     v1 = np.array(v1)
     v2 = np.array(v2)
     if method=="procrustes":  # align with OP

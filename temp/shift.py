@@ -10,7 +10,7 @@ Positives -> semantically changed
 We can begin by aligning on all words, and then learn better landmarks from
 there. Alternatively, one can start from random landmarks."""
 # Local modules
-from temp.wordvectors import WordVectors, extend_normal_with_sense
+from temp.wordvectors import WordVectors
 from temp.alignment import align
 
 # Third party modules
@@ -380,10 +380,16 @@ def s4(wv1, wv2, extended_wv1=None, extended_wv2=None,
         prev_landmarks = set(landmarks)
         if update_landmarks:
             landmarks = []
+            landmark_pairs = []
             non_landmarks = []
-            for id, prediction in zip(wv1.word_id.values(), predict_real):
+            for word, match, prediction in zip( 
+                                            wv1.words, 
+                                            wv2_original.words, 
+                                            predict_real):
+                id = wv1.word_id[word]
                 if prediction < threshold:
                     landmarks.append(id)
+                    landmark_pairs.append((word, match))
                 else:
                     non_landmarks.append(id)
 
@@ -413,9 +419,9 @@ def s4(wv1, wv2, extended_wv1=None, extended_wv2=None,
     if not update_landmarks:
         return model
     elif return_model:
-        return landmarks, non_landmarks, Q, model
+        return landmarks, non_landmarks, landmark_pairs, Q, model
     else:
-        return landmarks, non_landmarks, Q 
+        return landmarks, non_landmarks, landmark_pairs, Q 
 
 
 # %%
