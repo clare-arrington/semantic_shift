@@ -36,7 +36,7 @@ def predict_target_shift(
     for i in range(num_loops):
         print(f'{i+1} / {num_loops}')
 
-        landmarks, landmark_terms, align_wv, anchor_wv = align_vectors(
+        landmarks, landmark_pairs, align_wv, anchor_wv = align_vectors(
                                             align_method, all_word_pairs, 
                                             align_wv, anchor_wv)
 
@@ -56,11 +56,12 @@ def predict_target_shift(
                     dists[classify_method.name], classify_method.threshold, 
                     align_wv.model, anchor_wv.model, target_word_pairs)
 
-                shift_data, ratio_data = make_sense_prediction(prediction_info, classify_method.threshold)
+                shift_data, ratio_data, target_words, true_labels = make_sense_prediction(
+                    prediction_info, classify_method.threshold)
 
                 accuracies, results = assess_sense_prediction(
-                    shift_data, ratio_data, targets)
-            
+                    shift_data, ratio_data, target_words, true_labels)
+                
             all_accuracies[classify_method.name].append(accuracies)
             max_acc = max(accuracies.values())
 
@@ -91,7 +92,7 @@ def predict_target_shift(
                     
                 results.to_csv(f"{path_out}/labels.csv", index=False)
 
-                save_landmark_info(path_out, landmark_terms, landmarks)
+                save_landmark_info(path_out, landmark_pairs, landmarks)
 
     print('Tests complete!')
     for classify_method, accuracy in best_accuracies.items():

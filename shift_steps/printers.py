@@ -23,13 +23,15 @@ def print_single_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFra
                             'No Shift': 'not shifted', 
                             'Shifted': 'shifted'}
 
-        for target, info in sense_dists.items():        
+        ## TODO: I edited this but maybe that was bad
+        for target, sense_info in sense_dists.items():
             label = results[results.Words == target]['True Label'].iloc[0]
             print(f'\n{target} : {is_shifted[label]}', file=fout)
-            
-            sense_sorted = sorted(info, key=lambda tup: tup[0])
-            for sense, dist, count, label in sense_sorted:
-                print(f'\tSense {sense[-1]} : {dist:.2f}, {count}, {is_shifted[label]}', file=fout)
+
+            for sense, info in sense_info.items():    
+                sense_sorted = sorted(info, key=lambda tup: tup[0])
+                for anchor, dist, count, label in sense_sorted:
+                    print(f'\tSense {sense[-1]} : {dist:.2f}, {count}, {is_shifted[label]}', file=fout)
 
 def print_both_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame, 
                        threshold: float, path_out: str, 
@@ -55,21 +57,23 @@ def print_both_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame
                             'No Shift': 'not shifted', 
                             'Shifted': 'shifted'}
 
-        for target, info in sense_dists.items():        
-            label = results[results.Words == target]['True Label'].iloc[0]
-            print(f'\n{target} : {is_shifted[label]}', file=fout)
-            
-            sense_sorted = sorted(info, key=lambda tup: tup[:2])
-            printed = []
-            for sense, anchor, count, anchor_wc, dist, label in sense_sorted:
-                if sense not in printed:
-                    if '0' not in sense:
-                        print('', file=fout)
-                    print(f'\tAlign Sense {sense[-1]} : {count}', file=fout)
-                    printed.append(sense)
+        for target, sense_info in sense_dists.items():
+            # label = results[results.Words == target]['True Label'].iloc[0]
+            # print(f'\n{target} : {is_shifted[label]}', file=fout)
+            print(f'\n{target} : ', file=fout)
+            # print(sense_info)
 
-                print(f'\t\tAnchor Sense {anchor[-1]} : {dist:.2f}, {anchor_wc}, {is_shifted[label]}', file=fout)
+            for sense in sorted(sense_info): 
+                info = sense_info[sense]
+                print(f'\tAlign Sense {sense[-1]} :', file=fout)
+                # TODO: add count back
+                # print(f'\tAlign Sense {sense} : {count}', file=fout)
 
+                sense_sorted = sorted(info, key=lambda tup: tup[0])
+                # TODO: is count used right in predictions?
+                for anchor, count, anch_c, dist, shift_prediction in sense_sorted:
+                    label = shift_prediction
+                    print(f'\t\tAnchor Sense {anchor[-1]} : {dist:.2f}, {anch_c}, {is_shifted[label]}', file=fout)
 
 def print_shift_info(accuracies: Dict[str,float], results: pd.DataFrame, path_out: str, 
                      align_method: str, classify_method: str, threshold: float,
@@ -117,17 +121,15 @@ def print_shift_info(accuracies: Dict[str,float], results: pd.DataFrame, path_ou
             for word in shifted:
                 print(f'\t{word}', file=fout)
 
-def save_landmark_info(path_out, landmark_terms, landmarks):
-    with open(f'{path_out}/sense_landmarks.txt' , 'w') as f:
-        for landmark in landmark_terms:
-            if '.' in landmark:
-                f.write(landmark)
-                f.write('\n')
+def save_landmark_info(path_out, landmark_pairs, landmarks):
+    with open(f'{path_out}/landmarks.txt' , 'w') as f:
+        for l1, l2 in landmark_pairs:
+            f.write(f'({l1}, {l2})\n')
 
     ## I save both to be safe; you can verify the models are 
     ## the same if these two sets pull the same information
-    with open(f'{path_out}/landmarks.pkl' , 'wb') as pf:
-        pickle.dump(landmark_terms, pf)
+    with open(f'{path_out}/landmark_pairs.pkl' , 'wb') as pf:
+        pickle.dump(landmark_pairs, pf)
 
     with open(f'{path_out}/landmark_ids.pkl' , 'wb') as pf:
         pickle.dump(landmarks, pf)

@@ -14,7 +14,6 @@ class Train_Method_Info:
     def __repr__(self):
         return f"Train_Method_Info('{self.name}', {self.params}, {self.threshold})"
 
-## TODO: reconsider the files and naming conventions 
 ## Align Step
 def align_vectors(
     align_method: Train_Method_Info, 
@@ -30,6 +29,9 @@ def align_vectors(
     print(f'Starting {align_method.name} aligning')
     if align_method.name == 'global':
         landmarks = list(wv1.word_id.values())
+        landmark_pairs = []
+
+        print(landmarks[:3])
 
     elif align_method.name == 's4':
         if add_senses_in_alignment:
@@ -41,8 +43,6 @@ def align_vectors(
             print(f"Size of anchor WV after senses added: {len(wv2)} -> {len(anchor_wv.extended_vec)}" )
             print(f"\nShould be {len(wv2)} + {len(word_pairs)} = {len(wv2) + len(word_pairs)}")
 
-            ## Align with subset of landmarks
-            ## TODO: I need to get the landmark pair
             landmarks, _, landmark_pairs, Q = s4(
                 wv1, wv2, align_wv.extended_vec, anchor_wv.extended_vec, **align_method.params)
             print('Done with S4 aligning')
@@ -50,6 +50,7 @@ def align_vectors(
             print(f"Check for any unwanted mutations: {len(wv2)}, {len(anchor_wv.extended_vec)}" )
 
             print(landmarks[:3])
+            print(landmark_pairs[:3])
 
             # sense_landmarks = [extended_wv1.words[i] for i in landmarks if '.' in extended_wv1.words[i]]
             # print(f"Senses in landmarks: {', '.join(sense_landmarks)}")
@@ -58,19 +59,20 @@ def align_vectors(
             wv2 = anchor_wv.extended_vec
         else:
             ## Align with subset of landmarks
-            landmarks, _, Q = s4(
+            landmarks, _, landmark_pairs, Q = s4(
                 wv1, wv2, **align_method.params)
             print('Done with S4 aligning')
             print(f"Check for any unwanted mutations: {len(wv1)}" )
 
     ## Align
     print(f'{len(landmarks)} landmarks selected')
-    wv1_, wv2_, Q = align(wv1, wv2, anchor_words=landmarks)
+    if landmark_pairs != []:
+        wv1_, wv2_, Q = align(wv1, wv2, anchor_pairs=landmark_pairs)
+    else:
+        wv1_, wv2_, Q = align(wv1, wv2, anchor_indices=landmarks)
     print("Size of aligned vocab:", len(wv1_))
     align_wv.partial_align_vec = wv1_
     anchor_wv.partial_align_vec = wv2_
-
-    landmark_terms = [wv1_.words[w] for w in landmarks]
     
     ## Align the original so that it matches wv1_ but has its full vocab
     align_wv.post_align_vec = WordVectors(
@@ -78,9 +80,10 @@ def align_vectors(
         vectors=np.dot(align_wv.normal_vec.vectors, Q))
     anchor_wv.post_align_vec = anchor_wv.normal_vec
 
-    return landmarks, landmark_terms, align_wv, anchor_wv
+    return landmarks, landmark_pairs, align_wv, anchor_wv
 
 ## Classify Step
+## TODO: add BSA
 def get_target_distances(
         classify_methods: List[Train_Method_Info],
         word_pairs: Tuple[str, str], 
@@ -91,6 +94,7 @@ def get_target_distances(
 
     ## If not sense, dists will be 1 to 1 for each target
     ## If there are senses it will be 1 to many for each target 
+
     target_dists = {}
 
     for classify_method in classify_methods:
