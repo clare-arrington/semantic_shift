@@ -37,8 +37,13 @@ def align(wv1, wv2, anchor_indices=None, anchor_words=None,
         v1 = [wv1[w] for w in anchor_words if w not in exclude]
         v2 = [wv2[w] for w in anchor_words if w not in exclude]
     elif anchor_pairs is not None:
-        v1 = [wv1[w1] for w1, w2 in anchor_pairs if (w1 not in exclude) and (w2 not in exclude) ]
-        v2 = [wv2[w2] for w1, w2 in anchor_pairs if (w1 not in exclude) and (w2 not in exclude)]
+        v1 = []
+        v2 = []
+        for w1, w2 in anchor_pairs:
+            if (w1 not in exclude) and (w2 not in exclude) and \
+                (w1 in wv1) and (w2) in wv2:
+                v1.append(wv1[w1])
+                v2.append(wv2[w2])
     else:  # just use all words
         v1 = [wv1[w] for w in wv1.words if w not in exclude]
         v2 = [wv2[w] for w in wv2.words if w not in exclude]
