@@ -1,4 +1,5 @@
 #%%
+from dotenv import dotenv_values
 import pandas as pd
 
 # Results from paper
@@ -6,7 +7,7 @@ import pandas as pd
 # align old (ccoha1) to new (ccoha2)
 
 ## TODO: this should be prepped ahead of time for all?
-def get_targets(data_path, corpus_name, sense_method, all_targets=False):
+def get_targets(data_path, sense_method, corpus_name=None, all_targets=False):
     if all_targets:
         target_data = f'{data_path}/masking_results/semeval/{corpus_name}/target_sense_labels.pkl'
         target_data = pd.read_pickle(target_data)
@@ -20,17 +21,20 @@ def get_targets(data_path, corpus_name, sense_method, all_targets=False):
         for target in og_targets:
             target_pos, label = target.split('\t')
             shifted_label = bool(int(label))
-            target, pos = target_pos.split('_') 
+            word = target_pos
+            shifted_word = target_pos
 
-            if sense_method == 'SSA':
-                word = target
-                shifted_word = target_pos
-            elif sense_method == 'BSA':                             
-                word = target
-                shifted_word = target
-            else:
-                word = target_pos
-                shifted_word = target_pos
+            # target, pos = target_pos.split('_') 
+
+            # if sense_method == 'SSA':
+            #     word = target
+            #     shifted_word = target_pos
+            # elif sense_method == 'BSA':                             
+            #     word = target
+            #     shifted_word = target
+            # else:
+            #     word = target_pos
+            #     shifted_word = target_pos
                 
             target = (word, shifted_word, shifted_label)
             targets.append(target)
@@ -41,50 +45,42 @@ def get_targets(data_path, corpus_name, sense_method, all_targets=False):
         target = (target, target, None)
         targets.append(target)
 
-    print(f'{len(targets)} targets loaded')
-    print(targets[:5])
+    # print(f'{len(targets)} targets loaded')
+    # print(targets[:5])
     return targets
 
-target_terms =  ['virus', 'bit', 'memory', 'long', 
-            'float', 'web', 'worm', 'bug', 'structure',
-            'cloud', 'ram', 'apple', 'cookie', 
-            'spam',  'intelligence', 'artificial', 
-            'time', 'work', 'action', 'goal', 'branch',
-            'power', 'result', 'complex', 'root',
-            'process', 'child', 'language', 'term',
-            'rule', 'law', 'accuracy', 'mean', 
-            'scale', 'variable', 'rest', 
-            'normal', 'network', 'frame', 'constraint', 
-            'subject', 'order', 'set', 'learn', 'machine',
-            'problem', 'scale', 'large', 
-            'model', 'based', 'theory', 'example', 
-            'function', 'field', 'space', 'state', 
-            'environment', 'compatible', 'case', 'natural', 
-            'agent', 'utility', 'absolute', 'value', 
-            'range', 'knowledge', 'symbol', 'true', 
-            'class', 'object', 'fuzzy', 'global', 'local', 
-            'search', 'traditional', 'noise', 'system']
-
-targets = [(target, target, None) for target in target_terms]
-
 ## Data Info
-data_path = '/home/clare/Data'
+data_path = dotenv_values(".env")['data_path']
+# TODO: can't run multiple methods at a time with this setup
+sense_method = 'normal'
 
 shift_config = {
-    "anchor_name"   : "1800s",
-    "align_name"    : "2000s",
-    "sense_methods" : [],
-    "num_loops"     : 3,
-    "targets"       : targets,
+    "anchor_name"     : "2000s",
+    "align_name"      : "1800s",
+    # "anchor_name"     : "1800s",
+    # "align_name"      : "2000s",
+    "data_path"       : data_path,
+    "sense_methods"   : [sense_method],
+    "num_loops"       : 10,
+    "clust_together"  : True,
+    "targets"         : get_targets(data_path, sense_method),
+    "dataset_name"    : "semeval",
+    "corpora_info"    : {
+              "1800s" : "CCOHA 1810 - 1860",
+              "2000s" : "CCOHA 1960 - 2010"
+    }
+}
 
-    "dataset_name"  : "semeval",
-    "corpora_info"  : {
-            "1800s" : "CCOHA 1810 - 1860",
-            "2000s" : "CCOHA 1960 - 2010"
-    },
-
-    
-    "data_path"     : data_path
+# TODO: this isn't working with both??
+methods = {
+    'align' : [
+        # 'global',
+        's4',
+    ],
+    'classify' : [
+        'cosine',
+        # 's4',
+    ]
 }
 
 params = {
@@ -106,3 +102,4 @@ params = {
         "n_negatives": 100
     }
 }
+
