@@ -1,4 +1,5 @@
 from typing import Dict, Tuple, NamedTuple
+from tabulate import tabulate
 import pandas as pd
 import pickle
 
@@ -23,17 +24,21 @@ def print_single_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFra
                             'No Shift': 'not shifted', 
                             'Shifted': 'shifted'}
 
-        ## TODO: I edited this but maybe that was bad
         for target, sense_info in sense_dists.items():
             label = results[results.Words == target]['True Label'].iloc[0]
-            print(f'\n{target} : {is_shifted[label]}', file=fout)
+            print(f'\n{target}', file=fout)
+            print(f'\tLabel: {is_shifted[label]}', file=fout)
 
-            for sense, info in sense_info.items():    
+            for anchor_term, info in sense_info.items():    
                 sense_sorted = sorted(info, key=lambda tup: tup[0])
-                for anchor, dist, count, label in sense_sorted:
-                    print(f'\tSense {sense[-1]} : {dist:.2f}, {count}, {is_shifted[label]}', file=fout)
+                count_printed = False
+                for sense, count, anchor_count, dist, shift_prediction in sense_sorted:
+                    if not count_printed:
+                        print(f'\tNum occurences: {anchor_count}\n', file=fout)
+                        count_printed = True
+                    print(f'\tSense {sense[-1]} : {dist:.2f}, {count} occurences \t {is_shifted[shift_prediction]}', file=fout)
 
-def print_both_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame, 
+def print_both_sense_output(results: pd.DataFrame, sense_matched_data,
                        threshold: float, path_out: str, 
                        align_vector: NamedTuple, anchor_vector: NamedTuple):
 
@@ -57,23 +62,25 @@ def print_both_sense_output(sense_dists: Dict[str, Tuple], results: pd.DataFrame
                             'No Shift': 'not shifted', 
                             'Shifted': 'shifted'}
 
-        for target, sense_info in sense_dists.items():
-            # label = results[results.Words == target]['True Label'].iloc[0]
-            # print(f'\n{target} : {is_shifted[label]}', file=fout)
-            print(f'\n{target} : ', file=fout)
-            # print(sense_info)
-
-            for sense in sorted(sense_info): 
-                info = sense_info[sense]
-                print(f'\tAlign Sense {sense[-1]} :', file=fout)
-                # TODO: add count back
-                # print(f'\tAlign Sense {sense} : {count}', file=fout)
-
-                sense_sorted = sorted(info, key=lambda tup: tup[0])
-                # TODO: is count used right in predictions?
-                for anchor, count, anch_c, dist, shift_prediction in sense_sorted:
-                    label = shift_prediction
-                    print(f'\t\tAnchor Sense {anchor[-1]} : {dist:.2f}, {anch_c}, {is_shifted[label]}', file=fout)
+        vector_names = [
+            (anchor_vector.corpus_name, align_vector.corpus_name),
+            (align_vector.corpus_name, anchor_vector.corpus_name)]
+        for target, match_info in sense_matched_data.items():
+            use_other_count = False
+            label = results[results.Words == target]['True Label'].iloc[0]
+            print(f'\n{target} : {is_shifted[label]}', file=fout)
+                
+            for corpus_names, matches in zip(vector_names, match_info):
+                main_corpus, other_corpus = corpus_names
+                print(f'\tMatches for {main_corpus} senses', file=fout)
+                for sense in sorted(matches):
+                    match, count, other_count, dist, label = matches[sense]
+                    if use_other_count:
+                        count, other_count = other_count, count
+                    print(f'\t\t{main_corpus}.{sense[-1]}  ({count})', end='', file=fout)
+                    print(f' -> {other_corpus}.{match[-1]} ({other_count})', file=fout)
+                    print(f'\t\t\t{is_shifted[label].capitalize()}, {dist:.2f}\n', file=fout)
+                use_other_count = True
 
 def print_shift_info(accuracies: Dict[str,float], results: pd.DataFrame, path_out: str, 
                      align_method: str, classify_method: str, threshold: float,
