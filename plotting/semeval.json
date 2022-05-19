@@ -1,0 +1,11 @@
+{
+    "anchor" : "2000s",
+    "others" : [
+        "1800s"
+    ],
+    "corpora_desc" : {
+        "1800s" : "1810 - 1860",
+        "2000s" : "1960 - 2010"
+    },
+    "target_file" : "binary.txt"
+}
