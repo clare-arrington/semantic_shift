@@ -259,7 +259,7 @@ def get_senses(vocab):
     
 def load_w2v_vectors(vector, vector_path, slice_path):
     vector.model = Word2Vec.load(
-        f'{vector_path}/{vector.type}/{vector.corpus_name}{slice_path}.vec')
+        f'{vector_path}/{vector.type}_{vector.corpus_name}{slice_path}.vec')
     vocab = list(vector.model.wv.index_to_key)
     vectors = vector.model.wv.vectors
     vector.normal_vec = WordVectors(words=vocab, vectors=vectors)
@@ -277,7 +277,8 @@ def load_wordvectors(
     normalize: bool = False
     ):
 
-    ## Original is in WordVector format already
+    ## Original is in WordVector format already 
+    ## - this is for vectors from the S4 paper 
     if align_vector.type == 'original':
         align_name = align_vector.corpus_name
         align_vector.normal_vec = WordVectors(

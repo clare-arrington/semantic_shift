@@ -19,38 +19,41 @@ def align_vectors(
     align_method: Train_Method_Info, 
     word_pairs: Tuple[str, str], 
     align_wv: VectorVariations, 
-    anchor_wv: VectorVariations, 
+    anchor_wv: VectorVariations,
+    verbose: bool, 
     add_senses_in_alignment=True):
 
     wv1, wv2 = intersection(align_wv.normal_vec, anchor_wv.normal_vec)
-    print("Size of common vocab:", len(wv1))
+    if verbose: print("Size of common vocab:", len(wv1))
 
     ## Get landmarks
-    print(f'Starting {align_method.name} aligning')
+    print(f'\nStarting {align_method.name} aligning')
     if align_method.name == 'global':
         landmarks = list(wv1.word_id.values())
         landmark_pairs = []
 
-        print(landmarks[:3])
+        if verbose: print(landmarks[:3])
 
     elif align_method.name == 's4':
         if add_senses_in_alignment:
             align_wv.extended_vec, anchor_wv.extended_vec = extend_normal_with_sense(
                 wv1, wv2, align_wv, anchor_wv, word_pairs)
 
-            print(f"Size of align WV after senses added: {len(wv1)} -> {len(align_wv.extended_vec)}" )
-            print(f"\nShould be {len(wv1)} + {len(word_pairs)} = {len(wv1) + len(word_pairs)}")
-            print(f"Size of anchor WV after senses added: {len(wv2)} -> {len(anchor_wv.extended_vec)}" )
-            print(f"\nShould be {len(wv2)} + {len(word_pairs)} = {len(wv2) + len(word_pairs)}")
+            if verbose: 
+                print(f"Size of align WV after senses added: {len(wv1)} -> {len(align_wv.extended_vec)}" )
+                print(f"\nShould be {len(wv1)} + {len(word_pairs)} = {len(wv1) + len(word_pairs)}")
+                print(f"Size of anchor WV after senses added: {len(wv2)} -> {len(anchor_wv.extended_vec)}" )
+                print(f"\nShould be {len(wv2)} + {len(word_pairs)} = {len(wv2) + len(word_pairs)}")
 
             landmarks, _, landmark_pairs, Q = s4(
                 wv1, wv2, align_wv.extended_vec, anchor_wv.extended_vec, **align_method.params)
             print('Done with S4 aligning')
-            print(f"Check for any unwanted mutations: {len(wv1)}, {len(align_wv.extended_vec)}" )
-            print(f"Check for any unwanted mutations: {len(wv2)}, {len(anchor_wv.extended_vec)}" )
+            if verbose: 
+                print(f"Check for any unwanted mutations: {len(wv1)}, {len(align_wv.extended_vec)}" )
+                print(f"Check for any unwanted mutations: {len(wv2)}, {len(anchor_wv.extended_vec)}" )
 
-            print(landmarks[:3])
-            print(landmark_pairs[:3])
+            if verbose: print(landmarks[:3])
+            if verbose: print(landmark_pairs[:3])
 
             # sense_landmarks = [extended_wv1.words[i] for i in landmarks if '.' in extended_wv1.words[i]]
             # print(f"Senses in landmarks: {', '.join(sense_landmarks)}")
@@ -62,7 +65,7 @@ def align_vectors(
             landmarks, _, landmark_pairs, Q = s4(
                 wv1, wv2, **align_method.params)
             print('Done with S4 aligning')
-            print(f"Check for any unwanted mutations: {len(wv1)}" )
+            if verbose: print(f"Check for any unwanted mutations: {len(wv1)}" )
 
     ## Align
     print(f'{len(landmarks)} landmarks selected')
